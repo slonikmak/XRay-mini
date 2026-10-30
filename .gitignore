@@ -1,0 +1,12 @@
+/frontend/node_modules/
+/frontend/dist/
+/frontend/wailsjs/
+/build/bin/
+*.exe
+*.test
+.DS_Store
+*.local.json
+
+/bin/
+*.syso
+.task/
