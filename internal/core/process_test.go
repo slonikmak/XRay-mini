@@ -1,7 +1,9 @@
 package core
 
 import (
+	"bytes"
 	"context"
+	"io"
 	"os"
 	"path/filepath"
 	"testing"
@@ -18,7 +20,7 @@ func TestMain(m *testing.M) {
 		if _, e := os.ReadFile(config); e != nil {
 			os.Exit(11)
 		}
-		if os.Args[2] == "-test" {
+		if os.Args[2] == "-test" && os.Getenv("XRAY_MINI_TEST_HOLD_PREFLIGHT") != "1" {
 			os.Exit(0)
 		}
 		time.Sleep(30 * time.Second)
@@ -37,15 +39,19 @@ func TestExecRunnerWithHelperProcess(t *testing.T) {
 	if e = os.WriteFile(config, []byte(testConfig), 0600); e != nil {
 		t.Fatal(e)
 	}
-	runner := execRunner{}
+
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	if e = runner.Test(ctx, binary, config); e != nil {
+	preflight, e := startContained(ctx, binary, []string{"run", "-test", "-config", config})
+	if e == nil {
+		e = preflight.Wait()
+	}
+	if e != nil {
 		t.Fatalf("helper preflight: %v", e)
 	}
 	runCtx, stop := context.WithCancel(context.Background())
 	defer stop()
-	child, e := runner.Start(runCtx, binary, config)
+	child, e := startContained(runCtx, binary, []string{"run", "-config", config})
 	if e != nil {
 		t.Fatalf("helper start: %v", e)
 	}
@@ -58,5 +64,30 @@ func TestExecRunnerWithHelperProcess(t *testing.T) {
 		_ = child.Kill()
 		<-done
 		t.Fatal("helper did not stop after cancellation")
+	}
+}
+
+func TestOutputDrainNeverRetainsChildText(t *testing.T) {
+	var drain outputDrain
+	secret := bytes.Repeat([]byte("secret-token=https://host/?password=private\n"), 100000)
+	drain.start(io.NopCloser(bytes.NewReader(secret)), 0)
+	drain.start(io.NopCloser(bytes.NewReader(secret)), 1)
+	drain.wg.Wait()
+	got := drain.Diagnostics()
+	if len(got) != 2 || got[0] != "xray-stdout-observed" || got[1] != "xray-stderr-observed" {
+		t.Fatalf("unsafe categories: %q", got)
+	}
+}
+func TestContainedStartRejectsCanceledContext(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	binary, e := os.Executable()
+	if e != nil {
+		t.Fatal(e)
+	}
+	if child, e := startContained(ctx, binary, []string{"run"}); e == nil {
+		child.Kill()
+		child.Wait()
+		t.Fatal("started canceled process")
 	}
 }

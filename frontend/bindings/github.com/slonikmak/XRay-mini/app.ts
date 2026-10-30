@@ -14,8 +14,8 @@ import { Call as $Call, CancellablePromise as $CancellablePromise } from "@wails
 // @ts-ignore: Unused imports
 import * as core$0 from "./internal/core/models.js";
 
-export function Connect(id: string, xrayPath: string): $CancellablePromise<core$0.Status> {
-    return $Call.ByID(164877153, id, xrayPath);
+export function Connect(id: string): $CancellablePromise<core$0.Status> {
+    return $Call.ByID(164877153, id);
 }
 
 export function DeleteProfile(id: string): $CancellablePromise<void> {
@@ -26,8 +26,8 @@ export function Disconnect(): $CancellablePromise<core$0.Status> {
     return $Call.ByID(3864343059);
 }
 
-export function GetLogs(): $CancellablePromise<core$0.LogEntry[] | null> {
-    return $Call.ByID(1743981476);
+export function GetRecentLogs(limit: number): $CancellablePromise<core$0.LogEntry[] | null> {
+    return $Call.ByID(3603263191, limit);
 }
 
 export function GetStatus(): $CancellablePromise<core$0.Status> {
@@ -40,4 +40,12 @@ export function ImportProfile(name: string, configJSON: string): $CancellablePro
 
 export function ListProfiles(): $CancellablePromise<core$0.Profile[] | null> {
     return $Call.ByID(1957526603);
+}
+
+export function PreviewImport(configJSON: string): $CancellablePromise<core$0.ImportPreview> {
+    return $Call.ByID(624461070, configJSON);
+}
+
+export function RenameProfile(id: string, name: string): $CancellablePromise<core$0.Profile> {
+    return $Call.ByID(1067637764, id, name);
 }

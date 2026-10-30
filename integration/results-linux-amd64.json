@@ -1,0 +1,72 @@
+{
+  "engine": "26.10.29",
+  "platform": "Linux amd64 fixture only",
+  "archive_sha256": "8a5f3e6a1057e4bd0f8a7c57c9d91204b4be0b74222a6e210d070603101163c2",
+  "tested_at_utc": "2026-10-30T14:55:56.929628+00:00",
+  "tests": [
+    {
+      "transport": "raw-reality",
+      "proxy": "http",
+      "request": "PASS"
+    },
+    {
+      "transport": "raw-reality",
+      "proxy": "socks",
+      "request": "PASS"
+    },
+    {
+      "transport": "raw-reality",
+      "proxy": "http",
+      "server_stopped_no_bypass": "PASS"
+    },
+    {
+      "transport": "raw-reality",
+      "proxy": "socks",
+      "server_stopped_no_bypass": "PASS"
+    },
+    {
+      "transport": "xhttp-reality",
+      "proxy": "http",
+      "request": "PASS"
+    },
+    {
+      "transport": "xhttp-reality",
+      "proxy": "socks",
+      "request": "PASS"
+    },
+    {
+      "transport": "xhttp-reality",
+      "proxy": "http",
+      "server_stopped_no_bypass": "PASS"
+    },
+    {
+      "transport": "xhttp-reality",
+      "proxy": "socks",
+      "server_stopped_no_bypass": "PASS"
+    },
+    {
+      "transport": "xhttp-tls",
+      "proxy": "http",
+      "request": "PASS"
+    },
+    {
+      "transport": "xhttp-tls",
+      "proxy": "socks",
+      "request": "PASS"
+    },
+    {
+      "transport": "xhttp-tls",
+      "proxy": "http",
+      "server_stopped_no_bypass": "PASS"
+    },
+    {
+      "transport": "xhttp-tls",
+      "proxy": "socks",
+      "server_stopped_no_bypass": "PASS"
+    }
+  ],
+  "executable_sha256": "e783b9d2b46ed1ab3617c59b04dfbce38c999322d018c6e060f18d88bf6158aa",
+  "version_output": "Xray 26.10.29 (Xray, Penetrates Everything.) 0afec66 (go1.27.3 linux/amd64)",
+  "result": "PASS",
+  "all_fixture_processes_reaped": true
+}

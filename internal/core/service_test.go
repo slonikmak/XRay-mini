@@ -12,7 +12,7 @@ import (
 	"time"
 )
 
-const testConfig = `{"outbounds":[{"protocol":"freedom"}]}`
+const testConfig = `{"outbounds":[{"protocol":"vless","settings":{"vnext":[{"address":"example.invalid","port":443,"users":[{"id":"00000000-0000-0000-0000-000000000001"}]}]},"streamSettings":{"network":"raw","security":"reality","realitySettings":{"serverName":"example.invalid","publicKey":"test"}}}]}`
 
 type fakeChild struct {
 	done  chan error
@@ -27,6 +27,7 @@ type fakeRunner struct {
 	preflight func(context.Context, string) error
 	child     *fakeChild
 	starts    atomic.Int32
+	startGate func(context.Context)
 }
 
 func (r *fakeRunner) Test(ctx context.Context, _ string, config string) error {
@@ -37,6 +38,9 @@ func (r *fakeRunner) Test(ctx context.Context, _ string, config string) error {
 }
 func (r *fakeRunner) Start(ctx context.Context, _, _ string) (childProcess, error) {
 	r.starts.Add(1)
+	if r.startGate != nil {
+		r.startGate(ctx)
+	}
 	return r.child, nil
 }
 func fixture(t *testing.T) (*Service, Profile, string, *fakeRunner) {
@@ -72,14 +76,14 @@ func waitState(t *testing.T, s *Service, state string) {
 	t.Fatalf("wanted %s, got %+v", state, s.GetStatus())
 }
 func TestDisconnectDuringPreparation(t *testing.T) {
-	s, p, path, r := fixture(t)
+	s, p, _, r := fixture(t)
 	entered := make(chan struct{})
 	r.preflight = func(ctx context.Context, _ string) error { close(entered); <-ctx.Done(); return ctx.Err() }
-	if status, e := s.Connect(p.ID, path); e != nil || status.ProcessState != "preparing" {
+	if status, e := s.Connect(p.ID); e != nil || status.ProcessState != "preparing" {
 		t.Fatalf("%+v %v", status, e)
 	}
 	<-entered
-	if _, e := s.Connect(p.ID, path); e == nil {
+	if _, e := s.Connect(p.ID); e == nil {
 		t.Fatal("second connect accepted")
 	}
 	start := time.Now()
@@ -94,8 +98,8 @@ func TestDisconnectDuringPreparation(t *testing.T) {
 	assertNoRuntime(t, s)
 }
 func TestRunningDisconnectWaitsOnceAndCleans(t *testing.T) {
-	s, p, path, r := fixture(t)
-	if _, e := s.Connect(p.ID, path); e != nil {
+	s, p, _, r := fixture(t)
+	if _, e := s.Connect(p.ID); e != nil {
 		t.Fatal(e)
 	}
 	waitState(t, s, "running")
@@ -111,15 +115,15 @@ func TestRunningDisconnectWaitsOnceAndCleans(t *testing.T) {
 	assertNoRuntime(t, s)
 }
 func TestCloseCancelsPreparationAndRejectsNewWork(t *testing.T) {
-	s, p, path, r := fixture(t)
+	s, p, _, r := fixture(t)
 	entered := make(chan struct{})
 	r.preflight = func(ctx context.Context, _ string) error { close(entered); <-ctx.Done(); return ctx.Err() }
-	_, _ = s.Connect(p.ID, path)
+	_, _ = s.Connect(p.ID)
 	<-entered
 	if e := s.Close(); e != nil {
 		t.Fatal(e)
 	}
-	if _, e := s.Connect(p.ID, path); e == nil {
+	if _, e := s.Connect(p.ID); e == nil {
 		t.Fatal("closed service connected")
 	}
 	if _, e := s.ImportProfile("new", testConfig); e == nil {
@@ -128,9 +132,9 @@ func TestCloseCancelsPreparationAndRejectsNewWork(t *testing.T) {
 	assertNoRuntime(t, s)
 }
 func TestPreflightErrorsNeverExposeCoreDiagnostics(t *testing.T) {
-	s, p, path, r := fixture(t)
+	s, p, _, r := fixture(t)
 	r.preflight = func(context.Context, string) error { return errors.New("secret-id secret-server private-path") }
-	_, _ = s.Connect(p.ID, path)
+	_, _ = s.Connect(p.ID)
 	waitState(t, s, "error")
 	if strings.Contains(s.GetStatus().Message, "secret") {
 		t.Fatal("status leaked diagnostics")
@@ -143,10 +147,10 @@ func TestPreflightErrorsNeverExposeCoreDiagnostics(t *testing.T) {
 	assertNoRuntime(t, s)
 }
 func TestUnexpectedExitIsNotHealthy(t *testing.T) {
-	s, p, path, r := fixture(t)
+	s, p, _, r := fixture(t)
 	probeEntered := make(chan struct{})
 	s.probe = func(ctx context.Context) bool { close(probeEntered); <-ctx.Done(); return false }
-	_, _ = s.Connect(p.ID, path)
+	_, _ = s.Connect(p.ID)
 	<-probeEntered
 	r.child.once.Do(func() { r.child.done <- errors.New("exit") })
 	waitState(t, s, "error")
@@ -173,9 +177,9 @@ func TestStoreRoundTripAndTraversal(t *testing.T) {
 	}
 }
 func TestOccupiedPortStopsBeforePreflight(t *testing.T) {
-	s, p, path, r := fixture(t)
+	s, p, _, r := fixture(t)
 	s.ports = func() error { return errors.New("busy") }
-	_, _ = s.Connect(p.ID, path)
+	_, _ = s.Connect(p.ID)
 	waitState(t, s, "error")
 	if r.starts.Load() != 0 {
 		t.Fatal("started with busy port")
@@ -195,11 +199,11 @@ func assertNoRuntime(t *testing.T, s *Service) {
 }
 
 func TestRapidReconnectAndRevision(t *testing.T) {
-	s, p, path, r := fixture(t)
+	s, p, _, r := fixture(t)
 	var previous uint64
 	for i := 0; i < 20; i++ {
 		r.child = &fakeChild{done: make(chan error, 1)}
-		if _, e := s.Connect(p.ID, path); e != nil {
+		if _, e := s.Connect(p.ID); e != nil {
 			t.Fatal(e)
 		}
 		s.Disconnect()
@@ -213,7 +217,7 @@ func TestRapidReconnectAndRevision(t *testing.T) {
 	}
 }
 func TestHealthRepeatsSeriallyAndStops(t *testing.T) {
-	s, p, path, _ := fixture(t)
+	s, p, _, _ := fixture(t)
 	s.healthInterval = time.Millisecond
 	var calls, concurrent atomic.Int32
 	s.probe = func(ctx context.Context) bool {
@@ -224,7 +228,7 @@ func TestHealthRepeatsSeriallyAndStops(t *testing.T) {
 		calls.Add(1)
 		return true
 	}
-	_, _ = s.Connect(p.ID, path)
+	_, _ = s.Connect(p.ID)
 	deadline := time.Now().Add(2 * time.Second)
 	for calls.Load() < 3 && time.Now().Before(deadline) {
 		time.Sleep(time.Millisecond)
@@ -238,5 +242,147 @@ func TestHealthRepeatsSeriallyAndStops(t *testing.T) {
 	time.Sleep(10 * time.Millisecond)
 	if calls.Load() != count {
 		t.Fatal("probe continued after stopped")
+	}
+}
+
+func TestHealthTwoFailuresAndRecovery(t *testing.T) {
+	s, p, _, _ := fixture(t)
+	s.healthInterval = time.Millisecond
+	results := make(chan bool)
+	s.probe = func(ctx context.Context) bool {
+		select {
+		case ok := <-results:
+			return ok
+		case <-ctx.Done():
+			return false
+		}
+	}
+	if _, err := s.Connect(p.ID); err != nil {
+		t.Fatal(err)
+	}
+	var last string
+	for i, step := range []struct {
+		ok    bool
+		state string
+	}{{true, "Connected"}, {false, "Connected"}, {false, "Degraded"}, {true, "Connected"}} {
+		results <- step.ok
+		deadline := time.Now().Add(time.Second)
+		for s.GetStatus().LastCheckedAt == last && time.Now().Before(deadline) {
+			time.Sleep(time.Millisecond)
+		}
+		st := s.GetStatus()
+		if st.State != step.state || st.LastCheckedAt == "" || st.LastCheckedAt == last {
+			t.Fatalf("step %d: %+v", i, st)
+		}
+		last = st.LastCheckedAt
+	}
+	s.Disconnect()
+	waitState(t, s, "stopped")
+}
+func TestOldSessionEventsIgnoredAndUniqueIDs(t *testing.T) {
+	s, p, _, r := fixture(t)
+	s.Connect(p.ID)
+	waitState(t, s, "running")
+	old := s.GetStatus().SessionID
+	s.Disconnect()
+	waitState(t, s, "stopped")
+	r.child = &fakeChild{done: make(chan error, 1)}
+	s.Connect(p.ID)
+	waitState(t, s, "running")
+	if old == s.GetStatus().SessionID {
+		t.Fatal("session ID reused")
+	}
+	s.events <- workerEvent{sessionID: old, kind: "StopCompleted", message: "stale failure"}
+	time.Sleep(5 * time.Millisecond)
+	if s.GetStatus().Message == "stale failure" {
+		t.Fatal("old event changed state")
+	}
+}
+func TestSlowSubscriberDoesNotBlockManager(t *testing.T) {
+	s, p, _, _ := fixture(t)
+	entered := make(chan struct{})
+	release := make(chan struct{})
+	var once sync.Once
+	s.SetEventCallback(func(Status) { once.Do(func() { close(entered) }); <-release })
+	s.Connect(p.ID)
+	<-entered
+	done := make(chan struct{})
+	go func() { s.Disconnect(); close(done) }()
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("subscriber blocked manager")
+	}
+	waitState(t, s, "stopped")
+	close(release)
+}
+func TestStoreIODoesNotBlockDisconnectOrSnapshot(t *testing.T) {
+	s, p, _, _ := fixture(t)
+	s.storeMu.Lock()
+	s.Connect(p.ID)
+	done := make(chan struct{})
+	go func() { s.GetStatus(); s.Disconnect(); close(done) }()
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("store I/O blocks manager")
+	}
+	s.storeMu.Unlock()
+	waitState(t, s, "stopped")
+}
+func TestRecentLogsBounded(t *testing.T) {
+	s, _, _, _ := fixture(t)
+	if len(s.GetRecentLogs(-1)) != 0 {
+		t.Fatal("negative limit")
+	}
+	if len(s.GetRecentLogs(1000)) > 200 {
+		t.Fatal("unbounded logs")
+	}
+}
+
+func TestLateProcessStartAfterCancelStillWaitsAndCleans(t *testing.T) {
+	s, p, _, r := fixture(t)
+	entered := make(chan struct{})
+	release := make(chan struct{})
+	r.startGate = func(context.Context) { close(entered); <-release }
+	s.Connect(p.ID)
+	<-entered
+	s.Disconnect()
+	if _, err := s.Connect(p.ID); err == nil {
+		t.Fatal("reconnect before cleanup")
+	}
+	close(release)
+	waitState(t, s, "stopped")
+	if r.child.waits.Load() != 1 {
+		t.Fatal("late child not waited exactly once")
+	}
+	assertNoRuntime(t, s)
+}
+
+// Diagnostic category filtering is fail closed even for an erroneous adapter.
+func TestDiagnosticAllowlistAndBound(t *testing.T) {
+	s, p, _, _ := fixture(t)
+	s.Connect(p.ID)
+	waitState(t, s, "running")
+	id := s.GetStatus().SessionID
+	s.events <- workerEvent{sessionID: id, kind: "Diagnostic", message: "secret-id https://secret.invalid/?token=secret", at: time.Now()}
+	for i := 0; i < 220; i++ {
+		s.events <- workerEvent{sessionID: id, kind: "Diagnostic", message: "xray-stderr-observed", at: time.Now()}
+	}
+	deadline := time.Now().Add(time.Second)
+	for len(s.GetRecentLogs(1000)) < 200 && time.Now().Before(deadline) {
+		time.Sleep(time.Millisecond)
+	}
+	logs := s.GetRecentLogs(1000)
+	if len(logs) != 200 {
+		t.Fatalf("bounded log count %d", len(logs))
+	}
+	for _, entry := range logs {
+		if strings.Contains(entry.Message, "secret") {
+			t.Fatal("untrusted diagnostic leaked")
+		}
+	}
+	if len(s.GetRecentLogs(3)) != 3 {
+		t.Fatal("limit not enforced")
 	}
 }

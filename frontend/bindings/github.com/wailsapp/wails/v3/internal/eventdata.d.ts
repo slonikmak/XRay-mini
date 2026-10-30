@@ -12,7 +12,7 @@ import type * as core$0 from "../../../../slonikmak/XRay-mini/internal/core/mode
 declare module "@wailsio/runtime" {
     namespace Events {
         interface CustomEvents {
-            "status": core$0.Status;
+            "connection:state-changed": core$0.Status;
         }
     }
 }

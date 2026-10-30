@@ -10,7 +10,7 @@ import (
 //go:embed all:frontend/dist
 var assets embed.FS
 
-func init() { application.RegisterEvent[core.Status]("status") }
+func init() { application.RegisterEvent[core.Status]("connection:state-changed") }
 
 func main() {
 	app := application.New(application.Options{

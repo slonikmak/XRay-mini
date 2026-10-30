@@ -26,12 +26,13 @@ func (a *App) ServiceStartup(ctx context.Context, options application.ServiceOpt
 	}
 	a.service, err = core.NewService(filepath.Join(dir, "XrayMini"))
 	if err != nil {
-		a.startupError = errors.New("Cannot open local profile storage")
+		// Core startup errors are fixed, sanitized categories (including instance ownership).
+		a.startupError = err
 		return a.startupError
 	}
 	a.service.SetEventCallback(func(status core.Status) {
 		if !a.closing.Load() {
-			application.Get().Event.Emit("status", status)
+			application.Get().Event.Emit("connection:state-changed", status)
 		}
 	})
 	return nil
@@ -70,11 +71,11 @@ func (a *App) DeleteProfile(id string) error {
 	}
 	return a.service.DeleteProfile(id)
 }
-func (a *App) Connect(id, xrayPath string) (core.Status, error) {
+func (a *App) Connect(id string) (core.Status, error) {
 	if err := a.ready(); err != nil {
 		return core.Status{}, err
 	}
-	return a.service.Connect(id, xrayPath)
+	return a.service.Connect(id)
 }
 func (a *App) Disconnect() core.Status {
 	if a.service == nil {
@@ -84,13 +85,26 @@ func (a *App) Disconnect() core.Status {
 }
 func (a *App) GetStatus() core.Status {
 	if a.service == nil {
-		return core.Status{ProcessState: "error", NetworkHealth: "unknown", Message: "Desktop backend unavailable"}
+		return core.Status{State: "Error", ProcessState: "error", NetworkHealth: "unknown", Message: "Desktop backend unavailable"}
 	}
 	return a.service.GetStatus()
 }
-func (a *App) GetLogs() []core.LogEntry {
+func (a *App) GetRecentLogs(limit int) []core.LogEntry {
 	if a.service == nil {
 		return []core.LogEntry{}
 	}
-	return a.service.GetLogs()
+	return a.service.GetRecentLogs(limit)
+}
+
+func (a *App) RenameProfile(id, name string) (core.Profile, error) {
+	if err := a.ready(); err != nil {
+		return core.Profile{}, err
+	}
+	return a.service.RenameProfile(id, name)
+}
+func (a *App) PreviewImport(configJSON string) (core.ImportPreview, error) {
+	if err := a.ready(); err != nil {
+		return core.ImportPreview{}, err
+	}
+	return core.PreviewImport(configJSON)
 }

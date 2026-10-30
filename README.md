@@ -1,82 +1,53 @@
-# Xray Mini · desktop prototype
+# Xray Mini · Windows local proxy
 
-Первый вариант простого клиента **Go + Wails v3.0.0 + React/TypeScript** для Windows. Приложение управляет отдельным Xray Core, а не реализует протоколы самостоятельно.
+Go **1.26.10**, Wails **3.0.0**, React/TypeScript. Windows 10/11 **x64** only. This is a local SOCKS5/HTTP proxy, **not a system VPN**: no TUN, system proxy changes, kill switch, auto-update or administrator privileges.
 
-## Что реализовано
+## Build and package
 
-- Локальные профили: импорт **полного Xray JSON**, список и удаление.
-- Connect / Disconnect, асинхронный запуск, проверка конфигурации перед запуском.
-- Раздельные состояния процесса Xray и доступности сети через HTTP-прокси.
-- Сохранение содержимого `outbounds`, включая REALITY, RAW/TCP, XHTTP/SplitHTTP и дополнительные параметры транспорта.
-- Локальные слушатели **SOCKS5 127.0.0.1:10808** (TCP, без UDP) и **HTTP 127.0.0.1:10809**.
-- Ограниченная диагностика жизненного цикла без содержимого конфигурации и без сырых логов Xray.
-- Шифрование сохранённых профилей через Windows DPAPI. На других ОС файлы профилей не шифруются, используются права 0600; это режим разработки, не обещание эквивалентной защиты.
-
-**Это локальный прокси, а не общесистемный VPN.** TUN, kill switch, автоматическое изменение системного прокси, подписки, `vless://` и автообновление Xray не входят в эту версию. Обычный трафик остальных приложений не перехватывается. Не рассчитывайте на защиту от утечек.
-
-## Готовая экспериментальная сборка
-
-В скачиваемом архиве `bin/XrayMini.exe` — неподписанная Windows x64 cross-сборка на Wails v3. В Git-репозитории бинарник не хранится: соберите его из исходников. Её запуск на Windows здесь не проверен. Нужны WebView2 Runtime и отдельно скачанный официальный Xray Core. Для самостоятельной сборки используйте шаги ниже.
-
-## Быстрый старт на Windows
-
-1. Установите Go (1.26.10+; закреплён toolchain 1.26.10), Node.js (22+), Microsoft WebView2 Runtime и необходимые зависимости Wails из [официальной инструкции](https://v3.wails.io/getting-started/installation/).
-2. В PowerShell из каталога проекта:
-
-   ```powershell
-   go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0
-   wails3 doctor
-   wails3 dev
-   ```
-
-   Если команда `wails3` не найдена, добавьте `%USERPROFILE%\go\bin` в PATH.
-3. Скачайте Xray Core из [официальных релизов](https://github.com/XTLS/Xray-core/releases). Распакуйте **весь** архив в отдельный каталог, включая `geoip.dat`/`geosite.dat`, если они нужны вашим правилам. Движок не включён в этот проект и не скачивается автоматически.
-4. В интерфейсе укажите абсолютный путь к доверенному `xray.exe`. Клиент запускает выбранный файл с правами текущего пользователя: не выбирайте случайный исполняемый файл.
-5. Импортируйте полный JSON вашего сервера, затем нажмите Connect. Примеры в `examples/` содержат заглушки и **не подключаются** без ваших реальных параметров.
-6. Вручную задайте HTTP-прокси `127.0.0.1:10809` в нужном приложении. По завершении отключите его там же. Альтернатива: SOCKS5 `127.0.0.1:10808`, с удалённым разрешением DNS, если приложение это поддерживает.
-
-Сборка exe:
+Install Go, Node.js 22+, Python 3, Wails prerequisites and Microsoft WebView2 Runtime. From this directory:
 
 ```powershell
+go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0
+wails3 doctor
 wails3 build
+python scripts/package_runtime.py bin
 ```
 
-Результат: `bin/XrayMini.exe`. Администратор для обычной работы не требуется. Автозапуск, установка службы и изменение сетевых настроек не выполняются.
+Ship **all of `bin/`**, including `XrayMini.exe`, `runtime/xray.exe`, its license and notice. The packaging script downloads the official pinned **Xray 26.10.29** archive, verifies both archive and executable SHA-256, and installs only the executable and notices. No unknown binary is executed to determine its version. Runtime checks its exact executable digest before **each** preflight and working-process launch. No arbitrary executable path is accepted. The application is unsigned; native Windows acceptance remains pending (see verification).
 
-## Импорт и совместимость
+For development, the same `runtime/` directory must be beside the executable Wails actually launches. Do not replace the pin with an arbitrary local binary. The displayed version describes the pinned package, not a claim that a missing executable is installed.
 
-- Принимаются верхнеуровневые поля `outbounds`, `dns`, `routing`, `policy`, `inbounds`, `log`.
-- Все `inbounds` заменяются двумя локальными слушателями с тегами `socks-in` и `http-in`. Исходные теги входов в ваших routing-правилах следует заменить соответствующим образом.
-- `log` заменяется на `{"loglevel":"none"}`. Остальные перечисленные разделы сохраняются без узкого преобразования полей.
-- Неизвестные верхнеуровневые разделы отклоняются явно. Это ограничение прототипа, а не поддержка любого произвольного Xray-конфига.
-- Конфигурация проходит `xray run -test -config <file>` перед запуском. Действительную поддержку XHTTP/REALITY определяет установленная версия Xray и настройки вашего сервера. Импорт JSON сам по себе не доказывает работоспособность соединения.
-- Используйте только доверенные конфиги. Импорт не является песочницей для произвольных сетевых настроек и ссылок на локальные ресурсы.
+## Use
 
-## Как читать статус
+1. Import client Xray JSON containing exactly **one VLESS outbound with streamSettings**. Examples contain placeholders, not working server credentials.
+2. Review and acknowledge the import preview: source inbounds, routing, other outbounds and other top-level sections are discarded. Only the standalone selected outbound is retained. Ambiguous selections, duplicate JSON keys and unsupported external dependencies/local resource references are rejected.
+3. Connect. Configure the desired application manually for **SOCKS5 `127.0.0.1:10808`** (TCP only) or **HTTP `127.0.0.1:10809`**. Both are fixed loopback listeners. Runtime routing sends both through the single selected VLESS outbound; no direct outbound is included.
+4. Disconnect before changing the active profile. Profiles can be renamed and deleted.
 
-`preparing` → проверка конфигурации и подготовка процесса; `running` → Xray запущен; `stopping` → ожидается остановка и очистка; `error` → подготовка или процесс завершились с ошибкой.
+RAW/REALITY, XHTTP/REALITY and XHTTP/TLS fields are preserved in the supported standalone subset. Import and successful `run -test` do **not** prove transport connectivity.
 
-Отдельно `networkHealth`: `checking`, `healthy`, `unhealthy`, `unknown`. Проверяется HTTPS-запрос к `https://www.gstatic.com/generate_204` **через локальный HTTP-прокси**. Запрос возникает только после явного Connect. Этот адрес может быть недоступен в вашей сети, даже если другой трафик работает. Импортированные routing-правила могут отправлять проверку напрямую: `healthy` не доказывает анонимность, отсутствие утечек или туннелирование каждого запроса. Неудачная проверка не запускает автоперезапуск Xray.
+## Status and safety
 
-## Разработка и проверки
+`Connecting` → `Connected` only after a real HTTPS request through the local HTTP proxy. A probe has a **5 second timeout**, runs serially every **30 seconds**, and uses `https://www.gstatic.com/generate_204`. Two consecutive failures show `Degraded`; success resets the count. One destination cannot prove every destination works. Xray is not automatically restarted. `lastCheckedAt` records the last completed probe.
+
+Profiles use Windows DPAPI. Runtime JSON is briefly plaintext in a private DACL-protected directory; normal cleanup removes it. An exclusive per-data-directory OS lock prevents another instance from deleting an active session; startup removes stale `runtime-*` after acquiring that lock. This is not secure disk erasure, nor protection against a compromised user/admin. Non-Windows storage is development-only, not DPAPI-equivalent.
+
+Preflight and working Xray are created **inside** a kill-on-close Windows Job Object using `PROC_THREAD_ATTRIBUTE_JOB_LIST`; there is no create-then-assign crash window. Native crash/DPAPI/ACL/WebView2 verification still must run on Windows.
+
+Diagnostics retain only bounded application messages and fixed Xray stdout/stderr-presence categories. Untrusted Xray output is drained but never displayed or retained. Server addresses, UUIDs, URLs and raw configuration are not copied into diagnostics.
+
+## Tests
 
 ```sh
+go test -race ./internal/core
+go vet ./internal/core
 cd frontend
 npm ci
 npm run typecheck
-npm run build
 npm test
-cd ..
-go test -race ./internal/...
-go vet ./internal/...
+npm run build
 ```
 
-Сгенерированные `frontend/bindings` включены в репозиторий. После изменения публичного Go API выполните `wails3 task bindings` и пересоберите frontend. `wails3 build` выполняет это автоматически, устанавливает зависимости через `npm ci`, добавляет Windows manifest/icon и собирает GUI с `-tags production`. Taskfile предназначен для Windows (amd64 по умолчанию, `ARCH=arm64` можно указать отдельно; arm64 здесь не проверен).
+Bindings are generated by `wails3 task bindings` (also part of build). Browser mode without Wails reports backend unavailable, not a fake connection.
 
-`npm run dev` позволяет открыть интерфейс в браузере. Без Wails он честно показывает отсутствие desktop bridge: это не работающий VPN и не симуляция подключения.
-
-Описание архитектуры: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). Фактически выполненные проверки и ограничения: [docs/VERIFICATION.md](docs/VERIFICATION.md).
-
-## Допущения
-
-Основа восстановлена из доступных сообщений обсуждения: простой Windows-клиент, отдельный Xray, Go/Wails/React, JSON-first, ручной прокси. Полный текст первоначальной спеки был недоступен. По вашему запросу проект переведён на стабильный **Wails v3.0.0** (релиз 26 октября 2026): Go-модуль, CLI и npm-runtime закреплены на одной версии. Используются v3 services, сгенерированные bindings и новый Taskfile; v2 bridge удалён. Настройки настоящего сервера и секреты не использовались. Это исходный прототип для дальнейшей проверки, не подписанный production-релиз.
+See [architecture](docs/ARCHITECTURE.md), [verification and pending acceptance](docs/VERIFICATION.md), and [audit traceability](docs/AUDIT-FIXES.md). The full authoritative [specification](docs/xray-mini-spec-v0.2.ru.md) and [baseline audit](docs/xray-mini-audit-v0.2.ru.md) are retained unchanged. The audit describes the old commit, not the fixed tree.

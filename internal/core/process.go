@@ -3,12 +3,11 @@ package core
 import (
 	"context"
 	"errors"
+	"io"
 	"net"
 	"net/http"
 	"net/url"
-	"os"
-	"os/exec"
-	"path/filepath"
+	"sync"
 	"time"
 )
 
@@ -21,45 +20,73 @@ type processRunner interface {
 	Start(context.Context, string, string) (childProcess, error)
 }
 type execRunner struct{}
-type execChild struct {
-	cmd     *exec.Cmd
-	release func()
-}
 
-func (c *execChild) Wait() error { defer c.release(); return c.cmd.Wait() }
-func (c *execChild) Kill() error { return c.cmd.Process.Kill() }
 func (execRunner) Test(ctx context.Context, path, config string) error {
-	cmd := exec.CommandContext(ctx, path, "run", "-test", "-config", config)
-	cmd.Dir = filepath.Dir(path)
-	configureCommand(cmd)
-	// nil stdout/stderr are the null device. Xray diagnostics may contain credentials.
-	return cmd.Run()
+	child, err := startVerifiedContained(ctx, path, []string{"run", "-test", "-config", config})
+	if err != nil {
+		return err
+	}
+	return child.Wait()
 }
 func (execRunner) Start(ctx context.Context, path, config string) (childProcess, error) {
-	cmd := exec.CommandContext(ctx, path, "run", "-config", config)
-	cmd.Dir = filepath.Dir(path)
-	configureCommand(cmd)
-	if err := cmd.Start(); err != nil {
-		return nil, err
-	}
-	release, err := containProcess(cmd.Process)
+	return startVerifiedContained(ctx, path, []string{"run", "-config", config})
+}
+
+// Hold a deny-write/delete handle across hash verification and native process
+// creation on Windows, closing the ordinary executable replacement race.
+func startVerifiedContained(ctx context.Context, path string, args []string) (childProcess, error) {
+	release, err := lockExecutable(path)
 	if err != nil {
-		_ = cmd.Process.Kill()
-		_ = cmd.Wait()
 		return nil, err
 	}
-	return &execChild{cmd, release}, nil
-}
-func validateBinary(path string) error {
-	if !filepath.IsAbs(path) {
-		return errors.New("choose an absolute path to a trusted Xray executable")
+	defer release()
+	if err = validateBinary(path); err != nil {
+		return nil, err
 	}
-	fi, e := os.Stat(path)
-	if e != nil || !fi.Mode().IsRegular() {
-		return errors.New("Xray executable does not exist or is not a regular file")
-	}
-	return nil
+	return startContained(ctx, path, args)
 }
+
+// Raw child output is never retained or interpreted: even apparently harmless
+// Xray messages can contain addresses, credentials or secret URL parameters.
+// Fixed-size reads drain both streams, recording only an allowlisted category.
+type outputDrain struct {
+	mu   sync.Mutex
+	seen [2]bool
+	wg   sync.WaitGroup
+}
+
+func (d *outputDrain) start(r io.ReadCloser, stream int) {
+	d.wg.Add(1)
+	go func() {
+		defer d.wg.Done()
+		defer r.Close()
+		var b [4096]byte
+		for {
+			n, e := r.Read(b[:])
+			if n > 0 {
+				d.mu.Lock()
+				d.seen[stream] = true
+				d.mu.Unlock()
+			}
+			if e != nil {
+				return
+			}
+		}
+	}()
+}
+func (d *outputDrain) Diagnostics() []string {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	result := []string{}
+	if d.seen[0] {
+		result = append(result, "xray-stdout-observed")
+	}
+	if d.seen[1] {
+		result = append(result, "xray-stderr-observed")
+	}
+	return result
+}
+
 func checkPorts() error {
 	var listeners []net.Listener
 	defer func() {
@@ -80,7 +107,7 @@ func probeNetwork(ctx context.Context) bool {
 	proxy, _ := url.Parse("http://127.0.0.1:10809")
 	transport := &http.Transport{Proxy: http.ProxyURL(proxy), DialContext: (&net.Dialer{Timeout: 3 * time.Second}).DialContext, TLSHandshakeTimeout: 5 * time.Second}
 	defer transport.CloseIdleConnections()
-	client := &http.Client{Transport: transport, Timeout: 8 * time.Second, CheckRedirect: func(_ *http.Request, _ []*http.Request) error { return http.ErrUseLastResponse }}
+	client := &http.Client{Transport: transport, Timeout: 5 * time.Second, CheckRedirect: func(_ *http.Request, _ []*http.Request) error { return http.ErrUseLastResponse }}
 	req, e := http.NewRequestWithContext(ctx, http.MethodGet, "https://www.gstatic.com/generate_204", nil)
 	if e != nil {
 		return false

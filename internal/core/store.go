@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -21,7 +22,12 @@ type storedProfile struct {
 	Profile
 	Config json.RawMessage `json:"config"`
 }
-type profileStore struct{ dir string }
+type profileStore struct {
+	dir       string
+	mu        sync.Mutex
+	release   func() error
+	closeOnce sync.Once
+}
 
 func newStore(dir string) (*profileStore, error) {
 	absolute, err := filepath.Abs(dir)
@@ -35,13 +41,36 @@ func newStore(dir string) (*profileStore, error) {
 	if err := secureDirectory(dir); err != nil {
 		return nil, errors.New("cannot protect profile directory")
 	}
-	return &profileStore{dir}, nil
+	release, err := acquireStoreLock(filepath.Join(dir, ".instance.lock"))
+	if err != nil {
+		return nil, errors.New("another Xray Mini instance owns this profile directory")
+	}
+	entries, err := os.ReadDir(dir)
+	if err == nil {
+		for _, entry := range entries {
+			if strings.HasPrefix(entry.Name(), "runtime-") {
+				if err = os.RemoveAll(filepath.Join(dir, entry.Name())); err != nil {
+					break
+				}
+			}
+		}
+	}
+	if err != nil {
+		_ = release()
+		return nil, errors.New("cannot clean previous runtime configuration")
+	}
+	return &profileStore{dir: dir, release: release}, nil
 }
 func validID(id string) bool {
 	b, e := hex.DecodeString(id)
 	return e == nil && len(b) == 16 && id == strings.ToLower(id)
 }
 func (s *profileStore) read(id string) (storedProfile, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.readUnlocked(id)
+}
+func (s *profileStore) readUnlocked(id string) (storedProfile, error) {
 	var p storedProfile
 	if !validID(id) {
 		return p, errors.New("invalid profile ID")
@@ -60,6 +89,8 @@ func (s *profileStore) read(id string) (storedProfile, error) {
 	return p, nil
 }
 func (s *profileStore) list() ([]Profile, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	entries, e := os.ReadDir(s.dir)
 	if e != nil {
 		return nil, errors.New("cannot list profiles")
@@ -69,7 +100,7 @@ func (s *profileStore) list() ([]Profile, error) {
 		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".profile") {
 			continue
 		}
-		p, e := s.read(strings.TrimSuffix(entry.Name(), ".profile"))
+		p, e := s.readUnlocked(strings.TrimSuffix(entry.Name(), ".profile"))
 		if e != nil {
 			return nil, e
 		}
@@ -79,6 +110,8 @@ func (s *profileStore) list() ([]Profile, error) {
 	return result, nil
 }
 func (s *profileStore) add(name string, input []byte) (Profile, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	name = strings.TrimSpace(name)
 	if len(name) == 0 || len(name) > 100 {
 		return Profile{}, errors.New("profile name must be 1–100 bytes")
@@ -113,6 +146,8 @@ func (s *profileStore) add(name string, input []byte) (Profile, error) {
 	return p.Profile, nil
 }
 func (s *profileStore) remove(id string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	if !validID(id) {
 		return errors.New("invalid profile ID")
 	}
@@ -120,4 +155,51 @@ func (s *profileStore) remove(id string) error {
 		return errors.New("cannot delete profile")
 	}
 	return nil
+}
+
+// close releases the OS-held instance lock only after session cleanup has completed.
+func (s *profileStore) close() error {
+	var err error
+	s.closeOnce.Do(func() {
+		if s.release != nil {
+			err = s.release()
+		}
+	})
+	return err
+}
+func (s *profileStore) rename(id, name string) (Profile, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	name = strings.TrimSpace(name)
+	if len(name) == 0 || len(name) > 100 {
+		return Profile{}, errors.New("profile name must be 1–100 bytes")
+	}
+	p, err := s.readUnlocked(id)
+	if err != nil {
+		return Profile{}, err
+	}
+	p.Name = name
+	raw, err := json.Marshal(p)
+	if err == nil {
+		raw, err = protect(raw)
+	}
+	if err != nil {
+		return Profile{}, errors.New("cannot encrypt renamed profile")
+	}
+	f, err := os.CreateTemp(s.dir, ".profile-update-")
+	if err != nil {
+		return Profile{}, errors.New("cannot save renamed profile")
+	}
+	defer os.Remove(f.Name())
+	if _, err = f.Write(raw); err == nil {
+		err = f.Sync()
+	}
+	closeErr := f.Close()
+	if err != nil || closeErr != nil {
+		return Profile{}, errors.New("cannot save renamed profile")
+	}
+	if os.Rename(f.Name(), filepath.Join(s.dir, id+".profile")) != nil {
+		return Profile{}, errors.New("cannot replace renamed profile")
+	}
+	return p.Profile, nil
 }

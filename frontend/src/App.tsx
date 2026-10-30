@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
-import { desktop, initialStatus, type LogEntry, type Profile, type Status } from './bridge';
+import { desktop, initialStatus, type ImportPreview, type LogEntry, type Profile, type Status } from './bridge';
 
 type IconName = 'power' | 'plus' | 'copy' | 'shield' | 'arrow' | 'trash' | 'close';
 function Icon({ name }: { name: IconName }) {
@@ -21,7 +21,6 @@ function Modal({ title, children, onClose, busy }: { title: string; children: Re
 }
 const processLabels: Record<Status['processState'], string> = { stopped: 'Not running', preparing: 'Starting…', running: 'Running', stopping: 'Stopping…', error: 'Error' };
 const healthLabels: Record<Status['networkHealth'], string> = { unknown: 'Not verified', checking: 'Checking…', healthy: 'Reachable', unhealthy: 'Check failed' };
-function savedPath() { try { return localStorage.getItem('xray-mini.executable') || ''; } catch { return ''; } }
 
 export default function App() {
   const [profiles, setProfiles] = useState<Profile[]>([]);
@@ -33,10 +32,11 @@ export default function App() {
   const [error, setError] = useState('');
   const [syncError, setSyncError] = useState('');
   const [notice, setNotice] = useState('');
-  const [modal, setModal] = useState<'import' | 'delete' | null>(null);
+  const [modal, setModal] = useState<'import' | 'delete' | 'rename' | null>(null);
   const [name, setName] = useState('');
   const [config, setConfig] = useState('');
-  const [xrayPath, setXrayPath] = useState(savedPath);
+  const [preview, setPreview] = useState<ImportPreview | null>(null);
+  const [acknowledged, setAcknowledged] = useState(false);
   const alive = useRef(false);
   const lock = useRef(false);
   const revision = useRef(0);
@@ -52,7 +52,7 @@ export default function App() {
     const version = ++revision.current;
     pollBusy.current = true;
     try {
-      const [nextProfiles, nextStatus, nextLogs] = await Promise.all([api.ListProfiles(), api.GetStatus(), api.GetLogs()]);
+      const [nextProfiles, nextStatus, nextLogs] = await Promise.all([api.ListProfiles(), api.GetStatus(), api.GetRecentLogs(100)]);
       if (!alive.current || version !== revision.current) return;
       setAvailable(true); setSyncError(''); setProfiles(nextProfiles || []); setStatus(previous => nextStatus.revision < previous.revision ? previous : nextStatus); setLogs(nextLogs || []);
       setSelectedId(id => (nextProfiles || []).some(p => p.id === id) ? id : (nextProfiles || [])[0]?.id || '');
@@ -61,9 +61,17 @@ export default function App() {
   }, []);
   useEffect(() => {
     alive.current = true;
+    // Subscribe before snapshot to avoid the initial read/listen race.
+    const unsubscribe = desktop()?.SubscribeStatus(next => {
+      if (!alive.current) return;
+      setStatus(previous => next.revision < previous.revision ? previous : next);
+      void refresh();
+    });
     void refresh(true);
-    const timer = window.setInterval(() => { void refresh(); }, 1500);
-    return () => { alive.current = false; revision.current++; pollBusy.current = false; window.clearInterval(timer); };
+    const recover = () => { void refresh(true); };
+    window.addEventListener('focus', recover);
+    document.addEventListener('visibilitychange', recover);
+    return () => { alive.current = false; revision.current++; pollBusy.current = false; unsubscribe?.(); window.removeEventListener('focus', recover); document.removeEventListener('visibilitychange', recover); };
   }, [refresh]);
 
   async function perform(label: string, action: () => Promise<void>) {
@@ -71,29 +79,43 @@ export default function App() {
     lock.current = true; setBusy(label); setError(''); setNotice('');
     try { await action(); }
     catch (e) { if (alive.current) setError(typeof e === 'string' ? e : e instanceof Error ? e.message : 'The desktop action failed. Please try again.'); }
-    finally { if (alive.current) { await refresh(true); setBusy(''); } lock.current = false; }
+    finally {
+      // Command acceptance must release the controls before unrelated profile I/O.
+      // refresh has its own generation/status-revision guards and may finish later.
+      lock.current = false;
+      if (alive.current) { setBusy(''); void refresh(true); }
+    }
   }
-  function closeModal() { if (lock.current) return; setModal(null); setConfig(''); setName(''); setError(''); }
+  function closeModal() { if (lock.current) return; setModal(null); setConfig(''); setName(''); setPreview(null); setAcknowledged(false); setError(''); }
   async function importProfile(event: FormEvent) {
     event.preventDefault();
     try { const parsed: unknown = JSON.parse(config); if (!parsed || Array.isArray(parsed) || typeof parsed !== 'object') throw new Error(); }
     catch { setError('Enter a complete, valid Xray JSON object. Share links are not supported in this version.'); return; }
     const api = desktop(); if (!api) return;
     await perform('Importing', async () => {
+      if (!preview) {
+        const next = await api.PreviewImport(config);
+        if (!alive.current) return;
+        setPreview(next);
+        if (next.droppedSections.length) return;
+      } else if (preview.droppedSections.length && !acknowledged) return;
       const profile = await api.ImportProfile(name.trim(), config);
       if (!alive.current) return;
-      setConfig(''); setName(''); setModal(null); setSelectedId(profile.id); setNotice('Profile imported. Configuration stays on this computer.');
+      setConfig(''); setName(''); setPreview(null); setAcknowledged(false); setModal(null); setSelectedId(profile.id); setNotice('Profile imported. Configuration stays on this computer.');
     });
   }
   async function toggleConnection() {
     const api = desktop(); if (!api || (!active && !selected)) return;
-    await perform(active ? 'Stopping' : 'Starting', async () => { if (active) await api.Disconnect(); else await api.Connect(selected!.id, xrayPath.trim()); });
+    await perform(active ? 'Stopping' : 'Starting', async () => {
+      const next = active ? await api.Disconnect() : await api.Connect(selected!.id);
+      if (alive.current) setStatus(previous => next.revision < previous.revision ? previous : next);
+    });
   }
   async function copyAddress(address: string) {
     try { await navigator.clipboard.writeText(address); if (alive.current) setNotice(`Copied ${address}`); }
     catch { if (alive.current) setError(`Clipboard unavailable. Copy manually: ${address}`); }
   }
-  function updatePath(value: string) { setXrayPath(value); try { localStorage.setItem('xray-mini.executable', value); } catch { /* Storage may be unavailable; keep the setting in memory. */ } }
+
   const healthy = status.processState === 'running' && status.networkHealth === 'healthy';
   const heading = !available ? 'Your connection, simplified.' : healthy ? 'Proxy is ready.' : status.processState === 'running' ? 'Xray is running.' : transition ? 'One moment…' : 'Ready when you are.';
 
@@ -118,11 +140,11 @@ export default function App() {
       {error && !modal && <div className="alert error" role="alert">{error}</div>}
       {notice && <div className="alert notice" role="status">{notice}</div>}
       <section className="connection-card">
-        <div className="card-top"><span className="eyebrow">LOCAL PROXY</span><span className={`status-pill ${healthy ? 'good' : ''}`}><span className="small-dot"/>{!available ? 'Desktop required' : healthy ? 'Reachable' : processLabels[status.processState]}</span></div>
+        <div className="card-top"><span className="eyebrow">LOCAL PROXY</span><span className={`status-pill ${healthy ? 'good' : ''}`}><span className="small-dot"/>{!available ? 'Desktop required' : status.state}</span></div>
         <div className={`connection-symbol ${active ? 'active' : ''}`}><Icon name="power"/></div>
         <h1>{heading}</h1>
         <p className="hero-subtitle">{selected ? <>Selected profile <strong>{selected.name}</strong></> : 'Import a profile to get started with your local proxy.'}</p>
-        <button className={`connect-button ${active ? 'disconnect' : ''}`} disabled={!available || !!busy || status.processState === 'stopping' || (!active && (!selected || !xrayPath.trim() || !!syncError))} onClick={() => { void toggleConnection(); }}><Icon name="power"/>{busy === 'Starting' || busy === 'Stopping' ? `${busy}…` : status.processState === 'stopping' ? 'Stopping…' : status.processState === 'preparing' ? 'Cancel startup' : active ? 'Disconnect' : 'Connect'}</button>
+        <button className={`connect-button ${active ? 'disconnect' : ''}`} disabled={!available || !!busy || status.processState === 'stopping' || (!active && (!selected || !!syncError))} onClick={() => { void toggleConnection(); }}><Icon name="power"/>{busy === 'Starting' || busy === 'Stopping' ? `${busy}…` : status.processState === 'stopping' ? 'Stopping…' : status.processState === 'preparing' ? 'Cancel startup' : active ? 'Disconnect' : 'Connect'}</button>
         <div className="state-grid"><div><span className="state-label">XRAY PROCESS</span><strong><span className={`small-dot ${status.processState === 'running' ? 'good-dot' : ''}`}/>{available ? processLabels[status.processState] : 'Unavailable'}</strong></div><div><span className="state-label">NETWORK CHECK</span><strong><span className={`small-dot ${healthy ? 'good-dot' : ''}`}/>{available ? healthLabels[status.networkHealth] : 'Not verified'}</strong></div></div>
         <p className="status-detail">{status.message || 'Process status and network reachability are checked separately.'}</p>
       </section>
@@ -133,22 +155,24 @@ export default function App() {
       <p className="routing-note"><Icon name="shield"/>Only apps configured to use these proxies are routed. No TUN or system proxy changes.</p>
       <section className="settings-card">
         <div className="section-title"><h2>Runtime</h2><span>External Xray core</span></div>
-        <label htmlFor="xray-path">Xray executable path <span>(required)</span></label>
-        <input id="xray-path" value={xrayPath} onChange={e => updatePath(e.target.value)} placeholder="e.g. C:\Tools\Xray\xray.exe" disabled={active || !!busy} spellCheck={false}/>
-        <p className="hint">Enter the full absolute path to a trusted Xray binary, including xray.exe. Required to connect.</p>
+        <p>Official Xray Core <strong>{status.xrayVersion || 'Version unavailable'}</strong></p>
+        <p className="hint">Bundled runtime only. Its pinned SHA-256 is verified before execution. See the included THIRD-PARTY-NOTICES and licenses.</p>
+        <p className="hint">Last proxy check: {status.lastCheckedAt || 'Not checked yet'}. A successful check does not guarantee every destination is reachable.</p>
       </section>
       <details className="diagnostics"><summary><span>Diagnostics <span className="count">{logs.length}</span></span><span className="muted">Recent activity</span></summary><div className="log-list" aria-label="Recent diagnostic logs">{logs.length ? logs.slice(-100).map((entry, index) => <div className="log-entry" key={`${entry.time}-${index}`}><time>{entry.time}</time><span className={`log-level ${entry.level}`}>{entry.level}</span><span>{entry.message}</span></div>) : <p>No activity yet. Runtime events will appear here.</p>}</div></details>
-      {selected && <div className="profile-footer"><span>Selected: <strong>{selected.name}</strong></span><button className="text-danger" disabled={!available || !!busy || (active && status.profileId === selected.id)} onClick={() => { setError(''); setModal('delete'); }}><Icon name="trash"/>Delete profile</button></div>}
+      {selected && <div className="profile-footer"><span>Selected: <strong>{selected.name}</strong></span><button className="secondary" disabled={!available || !!busy} onClick={() => { setName(selected.name); setError(''); setModal('rename'); }}>Rename profile</button><button className="text-danger" disabled={!available || !!busy || (active && status.profileId === selected.id)} onClick={() => { setError(''); setModal('delete'); }}><Icon name="trash"/>Delete profile</button></div>}
     </main>
 
     {modal === 'import' && <Modal title="Import a profile" onClose={closeModal} busy={!!busy}><form onSubmit={event => { void importProfile(event); }}>
       <p className="modal-description">Paste a complete Xray JSON configuration. Reality and xHTTP settings are preserved; local proxy inbounds are managed by the app.</p>
       <label htmlFor="profile-name">Profile name</label><input id="profile-name" autoFocus value={name} onChange={e => setName(e.target.value)} maxLength={80} required disabled={!!busy} placeholder="My connection" autoComplete="off"/>
-      <label htmlFor="profile-json">Xray configuration</label><textarea id="profile-json" value={config} onChange={e => setConfig(e.target.value)} required disabled={!!busy} placeholder={'{\n  "outbounds": [...]\n}'} spellCheck={false} autoComplete="off" autoCapitalize="off"/>
+      <label htmlFor="profile-json">Xray configuration</label><textarea id="profile-json" value={config} onChange={e => { setConfig(e.target.value); setPreview(null); setAcknowledged(false); }} required disabled={!!busy} placeholder={'{\n  "outbounds": [...]\n}'} spellCheck={false} autoComplete="off" autoCapitalize="off"/>
+      {preview && preview.droppedSections.length > 0 && <div className="alert notice" role="status"><strong>Only the selected VLESS outbound will be imported.</strong><p>{preview.warning}</p><p>Discarded sections: {preview.droppedSections.join(', ')}</p><label><input type="checkbox" checked={acknowledged} onChange={e => setAcknowledged(e.target.checked)} disabled={!!busy}/>I understand these sections will not be used.</label></div>}
       <p className="privacy-note"><Icon name="shield"/>Contains credentials. Stored locally, never sent to a cloud service. The pasted text is cleared when saved or canceled.</p>
       {error && <div className="alert error" role="alert">{error}</div>}
-      <div className="modal-actions"><button type="button" className="secondary" onClick={closeModal} disabled={!!busy}>Cancel</button><button className="primary" type="submit" disabled={!!busy || !name.trim() || !config.trim()}>{busy ? 'Importing…' : 'Import profile'}</button></div>
+      <div className="modal-actions"><button type="button" className="secondary" onClick={closeModal} disabled={!!busy}>Cancel</button><button className="primary" type="submit" disabled={!!busy || !name.trim() || !config.trim() || (!!preview?.droppedSections.length && !acknowledged)}>{busy ? 'Checking…' : preview?.droppedSections.length ? 'Confirm import' : 'Import profile'}</button></div>
     </form></Modal>}
+    {modal === 'rename' && selected && <Modal title="Rename profile" onClose={closeModal} busy={!!busy}><form onSubmit={e => { e.preventDefault(); const api = desktop(); if (api) void perform('Renaming', async () => { await api.RenameProfile(selected.id, name.trim()); if (alive.current) { setModal(null); setName(''); setNotice('Profile renamed.'); } }); }}><label htmlFor="rename-name">Profile name</label><input id="rename-name" autoFocus value={name} onChange={e => setName(e.target.value)} maxLength={80} disabled={!!busy} required/>{error && <div className="alert error" role="alert">{error}</div>}<div className="modal-actions"><button type="button" className="secondary" onClick={closeModal} disabled={!!busy}>Cancel</button><button className="primary" disabled={!!busy || !name.trim()}>Save name</button></div></form></Modal>}
     {modal === 'delete' && selected && <Modal title="Delete this profile?" onClose={closeModal} busy={!!busy}><p className="modal-description">Remove <strong>{selected.name}</strong> and its saved configuration from this computer? This cannot be undone.</p>{error && <div className="alert error" role="alert">{error}</div>}<div className="modal-actions"><button className="secondary" onClick={closeModal} disabled={!!busy} autoFocus>Keep profile</button><button className="danger" disabled={!!busy} onClick={() => { const api = desktop(); if (api) void perform('Deleting', async () => { await api.DeleteProfile(selected.id); if (alive.current) { setModal(null); setNotice('Profile deleted.'); } }); }}>{busy ? 'Deleting…' : 'Delete profile'}</button></div></Modal>}
   </div>;
 }

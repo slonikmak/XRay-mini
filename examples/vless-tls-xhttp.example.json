@@ -1,0 +1,12 @@
+{
+  "outbounds": [{
+    "tag": "proxy",
+    "protocol": "vless",
+    "settings": {"vnext": [{"address": "server.example.invalid", "port": 443, "users": [{"id": "REPLACE_UUID", "encryption": "none"}]}]},
+    "streamSettings": {
+      "network": "xhttp", "security": "tls",
+      "tlsSettings": {"serverName": "REPLACE_SNI", "fingerprint": "chrome", "alpn": ["h2", "http/1.1"]},
+      "xhttpSettings": {"path": "/REPLACE_PATH", "mode": "auto"}
+    }
+  }]
+}

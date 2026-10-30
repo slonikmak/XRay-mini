@@ -2,19 +2,26 @@ package core
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"os"
 	"path/filepath"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
 type Status struct {
+	State         string `json:"state"`
 	ProcessState  string `json:"processState"`
 	NetworkHealth string `json:"networkHealth"`
 	ProfileID     string `json:"profileId"`
+	SessionID     string `json:"sessionId"`
 	Message       string `json:"message"`
 	Revision      uint64 `json:"revision"`
+	LastCheckedAt string `json:"lastCheckedAt"`
+	XrayVersion   string `json:"xrayVersion"`
 }
 type LogEntry struct {
 	Time    string `json:"time"`
@@ -22,155 +29,332 @@ type LogEntry struct {
 	Message string `json:"message"`
 }
 type session struct {
-	ctx    context.Context
-	cancel context.CancelFunc
-	done   chan struct{}
-	id     string
+	ctx           context.Context
+	cancel        context.CancelFunc
+	id, profileID string
+}
+type command struct {
+	kind, id string
+	reply    chan commandResult
+}
+type commandResult struct {
+	status Status
+	err    error
+}
+type workerEvent struct {
+	sessionID, kind, message string
+	ok                       bool
+	at                       time.Time
 }
 type Service struct {
-	mu             sync.Mutex
 	store          *profileStore
-	status         Status
-	logs           []LogEntry
-	active         *session
-	closed         bool
+	storeMu        sync.Mutex
+	commands       chan command
+	events         chan workerEvent
+	notifications  chan Status
+	loopDone       chan struct{}
+	publisherDone  chan struct{}
+	closeOnce      sync.Once
+	closed         atomic.Bool
+	snapshot       atomic.Value
+	logSnapshot    atomic.Value
+	callbackMu     sync.RWMutex
+	callback       func(Status)
 	runner         processRunner
 	probe          func(context.Context) bool
 	ports          func() error
-	callback       func(Status)
 	healthInterval time.Duration
 }
 
 func NewService(dataDir string) (*Service, error) {
-	store, e := newStore(dataDir)
+	st, e := newStore(dataDir)
 	if e != nil {
 		return nil, e
 	}
-	return &Service{store: store, status: Status{ProcessState: "stopped", NetworkHealth: "unknown", Message: "Local proxy is stopped"}, logs: []LogEntry{}, runner: execRunner{}, probe: probeNetwork, ports: checkPorts, healthInterval: 30 * time.Second}, nil
+	s := &Service{store: st, commands: make(chan command), events: make(chan workerEvent, 32), notifications: make(chan Status, 1), loopDone: make(chan struct{}), publisherDone: make(chan struct{}), runner: execRunner{}, probe: probeNetwork, ports: checkPorts, healthInterval: 30 * time.Second}
+	s.snapshot.Store(Status{State: "Disconnected", ProcessState: "stopped", NetworkHealth: "unknown", Message: "Local proxy is stopped", XrayVersion: XrayVersion})
+	s.logSnapshot.Store([]LogEntry{})
+	go s.publishLoop()
+	go s.loop()
+	return s, nil
 }
-func (s *Service) SetEventCallback(callback func(Status)) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.callback = callback
+func (s *Service) SetEventCallback(cb func(Status)) {
+	s.callbackMu.Lock()
+	s.callback = cb
+	s.callbackMu.Unlock()
 }
+func (s *Service) publishLoop() {
+	defer close(s.publisherDone)
+	for st := range s.notifications {
+		s.callbackMu.RLock()
+		cb := s.callback
+		s.callbackMu.RUnlock()
+		if cb != nil {
+			cb(st)
+		}
+	}
+}
+func (s *Service) request(kind, id string) commandResult {
+	reply := make(chan commandResult, 1)
+	select {
+	case s.commands <- command{kind, id, reply}:
+	case <-s.loopDone:
+		return commandResult{s.GetStatus(), errors.New("service is closed")}
+	}
+	select {
+	case r := <-reply:
+		return r
+	case <-s.loopDone:
+		select {
+		case r := <-reply:
+			return r
+		default:
+			return commandResult{s.GetStatus(), errors.New("service is closed")}
+		}
+	}
+}
+func (s *Service) GetStatus() Status { return s.snapshot.Load().(Status) }
+func (s *Service) GetRecentLogs(limit int) []LogEntry {
+	logs := s.logSnapshot.Load().([]LogEntry)
+	if limit < 0 {
+		limit = 0
+	}
+	if limit > len(logs) {
+		limit = len(logs)
+	}
+	return append([]LogEntry{}, logs[len(logs)-limit:]...)
+}
+func (s *Service) GetLogs() []LogEntry                               { return s.GetRecentLogs(200) }
+func (s *Service) PreviewImport(input string) (ImportPreview, error) { return PreviewImport(input) }
 func (s *Service) ListProfiles() ([]Profile, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	s.storeMu.Lock()
+	defer s.storeMu.Unlock()
+	if s.closed.Load() {
+		return nil, errors.New("service is closed")
+	}
 	return s.store.list()
 }
-func (s *Service) ImportProfile(name, configJSON string) (Profile, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.closed {
+func (s *Service) ImportProfile(name, input string) (Profile, error) {
+	s.storeMu.Lock()
+	defer s.storeMu.Unlock()
+	if s.closed.Load() {
 		return Profile{}, errors.New("service is closed")
 	}
-	return s.store.add(name, []byte(configJSON))
+	return s.store.add(name, []byte(input))
+}
+func (s *Service) RenameProfile(id, name string) (Profile, error) {
+	s.storeMu.Lock()
+	defer s.storeMu.Unlock()
+	if s.closed.Load() {
+		return Profile{}, errors.New("service is closed")
+	}
+	return s.store.rename(id, name)
 }
 func (s *Service) DeleteProfile(id string) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.closed {
-		return errors.New("service is closed")
+	if !validID(id) {
+		return errors.New("invalid profile ID")
 	}
-	if s.active != nil && s.active.id == id {
-		return errors.New("disconnect before deleting the active profile")
+	r := s.request("reserve-delete", id)
+	if r.err != nil {
+		return r.err
+	}
+	defer s.request("release-delete", id)
+	s.storeMu.Lock()
+	defer s.storeMu.Unlock()
+	if s.closed.Load() {
+		return errors.New("service is closed")
 	}
 	return s.store.remove(id)
 }
-func (s *Service) GetStatus() Status { s.mu.Lock(); defer s.mu.Unlock(); return s.status }
-func (s *Service) GetLogs() []LogEntry {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return append([]LogEntry{}, s.logs...)
+func (s *Service) Connect(id string) (Status, error) {
+	r := s.request("connect", id)
+	return r.status, r.err
 }
-
-// Called under mu. Callbacks must tolerate asynchronous delivery; poll GetStatus for authoritative state.
-func (s *Service) publish(state, health, id, message string) {
-	s.status = Status{ProcessState: state, NetworkHealth: health, ProfileID: id, Message: message, Revision: s.status.Revision + 1}
-	s.logs = append(s.logs, LogEntry{time.Now().UTC().Format(time.RFC3339), "info", message})
-	if len(s.logs) > 200 {
-		s.logs = append([]LogEntry{}, s.logs[len(s.logs)-200:]...)
-	}
-	if s.callback != nil {
-		callback, status := s.callback, s.status
-		go callback(status)
-	}
-}
-func (s *Service) Connect(id, xrayPath string) (Status, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.closed {
-		return s.status, errors.New("service is closed")
-	}
-	if s.active != nil {
-		return s.status, errors.New("a session is active or still cleaning up")
-	}
-	if !validID(id) {
-		return s.status, errors.New("invalid profile ID")
-	}
-	if e := validateBinary(xrayPath); e != nil {
-		return s.status, e
-	}
-	ctx, cancel := context.WithCancel(context.Background())
-	run := &session{ctx, cancel, make(chan struct{}), id}
-	s.active = run
-	s.publish("preparing", "unknown", id, "Preparing local proxy")
-	go s.run(run, xrayPath)
-	return s.status, nil
-}
-func (s *Service) Disconnect() Status {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.active != nil {
-		s.active.cancel()
-		if s.status.ProcessState != "stopping" {
-			s.publish("stopping", "unknown", s.active.id, "Stopping local proxy")
-		}
-	}
-	return s.status
-}
+func (s *Service) Disconnect() Status { return s.request("disconnect", "").status }
 func (s *Service) Close() error {
-	s.mu.Lock()
-	s.closed = true
-	run := s.active
-	if run != nil {
-		run.cancel()
-	}
-	s.mu.Unlock()
-	if run != nil {
-		<-run.done
-	}
+	s.closeOnce.Do(func() {
+		s.closed.Store(true)
+		s.request("close", "")
+		<-s.loopDone
+		s.storeMu.Lock()
+		s.store.close()
+		s.storeMu.Unlock()
+		<-s.publisherDone
+	})
 	return nil
 }
-func (s *Service) setRunning(run *session, health, message string) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.active == run && run.ctx.Err() == nil {
-		s.publish("running", health, run.id, message)
+
+// This goroutine is the only writer of session state, revisions and diagnostics.
+// File, DPAPI, process and network work never runs in this loop.
+func (s *Service) loop() {
+	defer close(s.loopDone)
+	defer close(s.notifications)
+	status := s.GetStatus()
+	logs := []LogEntry{}
+	var active *session
+	closing := false
+	failures := 0
+	deleting := map[string]bool{}
+	publish := func(state, process, health, message string) {
+		status.State = state
+		status.ProcessState = process
+		status.NetworkHealth = health
+		status.Message = message
+		status.Revision++
+		level := "info"
+		if state == "Error" {
+			level = "error"
+		} else if health == "unhealthy" {
+			level = "warning"
+		}
+		logs = append(logs, LogEntry{time.Now().UTC().Format(time.RFC3339Nano), level, message})
+		if len(logs) > 200 {
+			logs = logs[len(logs)-200:]
+		}
+		s.logSnapshot.Store(append([]LogEntry{}, logs...))
+		s.snapshot.Store(status)
+		select {
+		case s.notifications <- status:
+		default:
+			select {
+			case <-s.notifications:
+			default:
+			}
+			select {
+			case s.notifications <- status:
+			default:
+			}
+		}
+	}
+	for {
+		select {
+		case c := <-s.commands:
+			var err error
+			switch c.kind {
+			case "connect":
+				if closing || s.closed.Load() {
+					err = errors.New("service is closed")
+				} else if active != nil {
+					err = errors.New("a session is active or still cleaning up")
+				} else if !validID(c.id) {
+					err = errors.New("invalid profile ID")
+				} else if deleting[c.id] {
+					err = errors.New("profile is being deleted")
+				} else {
+					var id [16]byte
+					if _, e := rand.Read(id[:]); e != nil {
+						err = errors.New("cannot create session ID")
+					} else {
+						ctx, cancel := context.WithCancel(context.Background())
+						active = &session{ctx, cancel, hex.EncodeToString(id[:]), c.id}
+						status.ProfileID = c.id
+						status.SessionID = active.id
+						status.LastCheckedAt = ""
+						failures = 0
+						publish("Connecting", "preparing", "unknown", "Preparing local proxy")
+						go s.run(active)
+					}
+				}
+			case "disconnect":
+				if active != nil {
+					active.cancel()
+					publish("Disconnecting", "stopping", "unknown", "Stopping local proxy")
+				}
+			case "reserve-delete":
+				if closing {
+					err = errors.New("service is closed")
+				} else if active != nil && active.profileID == c.id {
+					err = errors.New("disconnect before deleting the active profile")
+				} else if deleting[c.id] {
+					err = errors.New("profile is being deleted")
+				} else {
+					deleting[c.id] = true
+				}
+			case "release-delete":
+				delete(deleting, c.id)
+			case "close":
+				closing = true
+				if active != nil {
+					active.cancel()
+					publish("Disconnecting", "stopping", "unknown", "Stopping local proxy")
+				}
+			}
+			c.reply <- commandResult{status, err}
+			if closing && active == nil {
+				return
+			}
+		case ev := <-s.events:
+			if active == nil || ev.sessionID != active.id {
+				continue
+			}
+			if ev.kind == "StopCompleted" {
+				active.cancel()
+				active = nil
+				if ev.message != "" {
+					publish("Error", "error", "unknown", ev.message)
+				} else {
+					status.ProfileID = ""
+					publish("Disconnected", "stopped", "unknown", "Local proxy is stopped")
+				}
+				if closing {
+					return
+				}
+				continue
+			}
+			if active.ctx.Err() != nil && ev.kind != "Diagnostic" {
+				continue
+			}
+			switch ev.kind {
+			case "Diagnostic":
+				switch ev.message {
+				case "xray-output", "xray-warning", "xray-error", "xray-stdout-observed", "xray-stderr-observed":
+					logs = append(logs, LogEntry{ev.at.UTC().Format(time.RFC3339Nano), "info", ev.message})
+					if len(logs) > 200 {
+						logs = logs[len(logs)-200:]
+					}
+					s.logSnapshot.Store(append([]LogEntry{}, logs...))
+				}
+			case "ProcessExited":
+			// Cleanup confirmation, not process exit alone, permits another Connect.
+			case "ConfigValidated":
+				publish("Connecting", "preparing", "unknown", "Xray configuration validated; network not yet checked")
+			case "ProcessStarted":
+				publish("Connecting", "running", "checking", "Xray is running; checking the local HTTP proxy")
+			case "ProxyReady", "HealthFailed":
+				status.LastCheckedAt = ev.at.UTC().Format(time.RFC3339Nano)
+				if ev.ok {
+					failures = 0
+					publish("Connected", "running", "healthy", "HTTP proxy check passed; other destinations may differ")
+				} else {
+					failures++
+					state := status.State
+					if failures >= 2 {
+						state = "Degraded"
+					}
+					publish(state, "running", "unhealthy", "HTTP proxy check failed; the control resource or network may be unavailable")
+				}
+			}
+		}
 	}
 }
-func (s *Service) run(run *session, path string) {
-	defer run.cancel()
+func (s *Service) event(run *session, kind, message string, ok bool) {
+	s.events <- workerEvent{run.id, kind, message, ok, time.Now()}
+}
+func (s *Service) run(run *session) {
 	failure := ""
 	tempDir := ""
 	defer func() {
+		run.cancel()
 		if tempDir != "" {
 			if e := os.RemoveAll(tempDir); e != nil {
-				failure = "Stopped, but temporary configuration cleanup failed; remove the runtime directory manually"
+				failure = "Stopped, but temporary configuration cleanup failed"
 			}
 		}
-		s.mu.Lock()
-		defer s.mu.Unlock()
-		s.active = nil
-		if failure != "" {
-			s.publish("error", "unknown", run.id, failure)
-		} else {
-			s.publish("stopped", "unknown", "", "Local proxy is stopped")
-		}
-		close(run.done)
+		s.event(run, "StopCompleted", failure, false)
 	}()
-	// Disk and process preparation occur outside the service mutex, so Disconnect remains responsive.
-	p, e := s.store.read(run.id)
+	s.storeMu.Lock()
+	p, e := s.store.read(run.profileID)
+	s.storeMu.Unlock()
 	if e != nil {
 		failure = "Could not read the selected profile"
 		return
@@ -192,11 +376,16 @@ func (s *Service) run(run *session, path string) {
 		failure = "Could not create private runtime directory"
 		return
 	}
+	if e = secureDirectory(tempDir); e != nil {
+		failure = "Could not protect runtime directory"
+		return
+	}
 	configPath := filepath.Join(tempDir, "config.json")
 	if e = os.WriteFile(configPath, cfg, 0600); e != nil {
 		failure = "Could not write runtime configuration"
 		return
 	}
+	path := bundledRuntimePath()
 	testCtx, cancel := context.WithTimeout(run.ctx, 15*time.Second)
 	e = s.runner.Test(testCtx, path, configPath)
 	cancel()
@@ -204,54 +393,66 @@ func (s *Service) run(run *session, path string) {
 		return
 	}
 	if e != nil {
-		failure = "Xray configuration preflight failed or timed out; verify the trusted core version and profile"
+		failure = "Trusted Xray preflight failed: check bundled runtime integrity and profile"
 		return
 	}
+	s.event(run, "ConfigValidated", "", false)
 	child, e := s.runner.Start(run.ctx, path, configPath)
 	if e != nil {
 		if run.ctx.Err() == nil {
-			failure = "Could not start or contain Xray"
+			failure = "Could not start verified Xray inside its process container"
 		}
 		return
 	}
 	exited := make(chan error, 1)
-	go func() { exited <- child.Wait() }()
-	s.setRunning(run, "checking", "Xray is running; checking the local HTTP proxy")
-	// Only this owner consumes exit and waits for cleanup. Probe cancellation is session-scoped.
+	go func() {
+		err := child.Wait()
+		s.event(run, "ProcessExited", "", false)
+		exited <- err
+	}()
+	seenDiagnostics := map[string]bool{}
+	collectDiagnostics := func() {
+		if d, ok := child.(interface{ Diagnostics() []string }); ok {
+			for _, category := range d.Diagnostics() {
+				if !seenDiagnostics[category] {
+					seenDiagnostics[category] = true
+					s.event(run, "Diagnostic", category, false)
+				}
+			}
+		}
+	}
+	diagnosticTicker := time.NewTicker(time.Second)
+	defer diagnosticTicker.Stop()
+	defer collectDiagnostics()
+
+	s.event(run, "ProcessStarted", "", false)
 	healthCtx, healthCancel := context.WithCancel(run.ctx)
 	healthDone := make(chan struct{})
-	defer func() { healthCancel(); <-healthDone }()
 	health := make(chan bool, 1)
 	go func() {
 		defer close(healthDone)
+		ticker := time.NewTicker(s.healthInterval)
+		defer ticker.Stop()
 		for {
-			ok := false
-			for attempt := 0; attempt < 3; attempt++ {
-				if healthCtx.Err() != nil {
-					return
-				}
-				if s.probe(healthCtx) {
-					ok = true
-					break
-				}
-				select {
-				case <-healthCtx.Done():
-					return
-				case <-time.After(500 * time.Millisecond):
-				}
+			if healthCtx.Err() != nil {
+				return
 			}
+			probeCtx, stop := context.WithTimeout(healthCtx, 5*time.Second)
+			ok := s.probe(probeCtx)
+			stop()
 			select {
 			case health <- ok:
 			case <-healthCtx.Done():
 				return
 			}
 			select {
-			case <-time.After(s.healthInterval):
+			case <-ticker.C:
 			case <-healthCtx.Done():
 				return
 			}
 		}
 	}()
+	defer func() { healthCancel(); <-healthDone }()
 	for {
 		select {
 		case <-run.ctx.Done():
@@ -263,8 +464,9 @@ func (s *Service) run(run *session, path string) {
 				failure = "Xray exited unexpectedly; no automatic restart was attempted"
 			}
 			return
+		case <-diagnosticTicker.C:
+			collectDiagnostics()
 		case ok := <-health:
-			// An already-exited process wins over a positive health result.
 			select {
 			case <-exited:
 				if run.ctx.Err() == nil {
@@ -274,9 +476,9 @@ func (s *Service) run(run *session, path string) {
 			default:
 			}
 			if ok {
-				s.setRunning(run, "healthy", "HTTP proxy check passed; this does not verify all traffic is tunneled")
+				s.event(run, "ProxyReady", "", true)
 			} else {
-				s.setRunning(run, "unhealthy", "Xray is running, but the HTTP proxy check failed")
+				s.event(run, "HealthFailed", "", false)
 			}
 		}
 	}
