@@ -1,0 +1,50 @@
+# Windows-only build tasks adapted from the Wails v3.0.0 templates.
+version: '3'
+vars:
+  APP_NAME: XrayMini
+  ARCH: '{{.ARCH | default "amd64"}}'
+  VITE_PORT: '{{.WAILS_VITE_PORT | default 9245}}'
+tasks:
+  bindings:
+    cmds:
+      - wails3 generate bindings -ts -i -clean=true
+    env:
+      GOOS: windows
+      GOARCH: '{{.ARCH}}'
+      CGO_ENABLED: '0'
+  frontend:
+    cmds:
+      - task: bindings
+      - task: frontend:install
+      - task: frontend:build
+  frontend:install:
+    dir: frontend
+    cmds:
+      - npm ci
+  frontend:build:
+    dir: frontend
+    cmds:
+      - npm run build
+  resources:
+    cmds:
+      - wails3 generate syso -arch {{.ARCH}} -icon build/windows/icon.ico -manifest build/windows/wails.exe.manifest -info build/windows/info.json -out wails_windows_{{.ARCH}}.syso
+  build:
+    cmds:
+      - task: frontend
+      - task: resources
+      - go build {{if eq .DEV "true"}}-buildvcs=false -gcflags=all="-l"{{else}}-tags production -trimpath -buildvcs=false -ldflags="-w -s -H windowsgui"{{end}} -o bin/{{.APP_NAME}}.exe .
+    env:
+      GOOS: windows
+      GOARCH: '{{.ARCH}}'
+      CGO_ENABLED: '0'
+  dev:
+    cmds:
+      - wails3 dev -config ./build/config.yml -port {{.VITE_PORT}}
+  common:dev:frontend:
+    dir: frontend
+    cmds:
+      - npm run dev -- --port {{.VITE_PORT}} --strictPort
+  run:
+    platforms: [windows]
+    cmds:
+      - ./bin/{{.APP_NAME}}.exe
