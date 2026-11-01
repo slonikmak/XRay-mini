@@ -104,11 +104,38 @@ func checkPorts() error {
 	return nil
 }
 func probeNetwork(ctx context.Context) bool {
-	proxy, _ := url.Parse("http://127.0.0.1:10809")
-	transport := &http.Transport{Proxy: http.ProxyURL(proxy), DialContext: (&net.Dialer{Timeout: 3 * time.Second}).DialContext, TLSHandshakeTimeout: 5 * time.Second}
+	return probeNetworkVia(ctx, "http://127.0.0.1:10809", "https://www.gstatic.com/generate_204")
+}
+
+func probeNetworkVia(ctx context.Context, proxyURL, controlURL string) bool {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	proxy, e := url.Parse(proxyURL)
+	if e != nil {
+		return false
+	}
+	dialer := &net.Dialer{Timeout: 3 * time.Second}
+	transport := &http.Transport{Proxy: http.ProxyURL(proxy), TLSHandshakeTimeout: 5 * time.Second}
+	transport.DialContext = func(_ context.Context, network, address string) (net.Conn, error) {
+		ticker := time.NewTicker(50 * time.Millisecond)
+		defer ticker.Stop()
+		for {
+			// Transport may detach its dial context from request cancellation.
+			// Use the whole probe's budget, and keep this connection for HTTP.
+			connection, err := dialer.DialContext(ctx, network, address)
+			if err == nil {
+				return connection, nil
+			}
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-ticker.C:
+			}
+		}
+	}
 	defer transport.CloseIdleConnections()
 	client := &http.Client{Transport: transport, Timeout: 5 * time.Second, CheckRedirect: func(_ *http.Request, _ []*http.Request) error { return http.ErrUseLastResponse }}
-	req, e := http.NewRequestWithContext(ctx, http.MethodGet, "https://www.gstatic.com/generate_204", nil)
+	req, e := http.NewRequestWithContext(ctx, http.MethodGet, controlURL, nil)
 	if e != nil {
 		return false
 	}
@@ -117,5 +144,5 @@ func probeNetwork(ctx context.Context) bool {
 		return false
 	}
 	defer response.Body.Close()
-	return response.StatusCode == http.StatusNoContent
+	return ctx.Err() == nil && response.StatusCode == http.StatusNoContent
 }

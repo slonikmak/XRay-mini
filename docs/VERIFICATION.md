@@ -1,5 +1,7 @@
 # Verification — native Windows update, 2026-11-01
 
+[Proxy-startup readiness fix](../_bmad-output/backlog/evidence/proxy-readiness-2026-11-01.md): delayed-listener/HTTP/TLS/deadline/cancellation regressions pass. Three native real-core starts passed their first production health check (3.037s,3.128s,1.401s from Connect), with Disconnect cleanup; this is backend evidence, not complete platform acceptance.
+
 Manual subscription import has a [separate real Windows GUI/external proxy report](../_bmad-output/backlog/evidence/subscription-acceptance-2026-11-01.md): five candidates loaded, one XHTTP/TLS endpoint passed HTTP/SOCKS HTTPS/egress and clean Disconnect. Other external transports and remaining system checks are still open.
 
 Windows 11 Home amd64 10.0.26300.9711, normal user. Go 1.26.10, Wails 3.0.0; actual owned WebView2 child 156.0.4314.58. The dirty source HEAD, exact artifact/source hashes and scenario outcomes are preserved in the [execution report](../_bmad-output/backlog/evidence/autonomous-execution-2026-11-01.md), not attributed to the old clean baseline.

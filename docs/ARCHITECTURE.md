@@ -12,7 +12,7 @@ The session worker owns the child; one waiter calls Wait once. ProcessStarted is
 
 Both generated inbounds bind 127.0.0.1. The sole selected VLESS outbound has a fixed tag and both inbound tags route explicitly to it. No original routing, direct fallback, DNS or policy is copied. The selected standalone transport subset rejects dependent references. The core, not Go/React, carries user traffic.
 
-A serial checker issues a real HTTPS request through the HTTP proxy with a 5-second deadline, immediately after startup then on a 30-second ticker. No overlap or inner retry burst. Two consecutive failures produce Degraded; success resets failures and produces Connected. Process state and network health remain separate. Last check time is included in status. Failure may mean the control resource is unavailable, not necessarily that the VLESS server failed.
+A serial checker begins immediately after startup, then on a 30-second ticker. Within a shared 5-second deadline it waits for the local proxy TCP connection in bounded 50 ms intervals and uses the successful connection for one real HTTPS control request. No overlapping checks or HTTP-request retry burst; TCP readiness alone cannot report health. Two consecutive failures produce Degraded; success resets failures and produces Connected. Process state and network health remain separate. Last check time is included in status. Failure may mean the control resource is unavailable, not necessarily that the VLESS server failed.
 
 React subscribes to `connection:state-changed` before loading the initial snapshot, drops older revisions and resynchronizes on focus/visibility. Reopening a window does not recreate backend connection state.
 

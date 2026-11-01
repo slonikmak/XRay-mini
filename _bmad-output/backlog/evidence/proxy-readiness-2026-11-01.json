@@ -1,0 +1,131 @@
+{
+  "schema_version": 1,
+  "started_at_utc": "2026-11-01T17:41:53.839581+00:00",
+  "finished_at_utc": "2026-11-01T17:41:56.612968+00:00",
+  "command": [
+    "proxy_readiness_verification_snapshot"
+  ],
+  "scope": "windows11-proxy-startup-readiness",
+  "app": {
+    "status": "available",
+    "revision": "0bce7ee87267b16a53f24c995b47daedbcb3e5c4",
+    "dirty": true
+  },
+  "environment": {
+    "system": "Windows",
+    "release": "11",
+    "version": "10.0.26300",
+    "machine": "AMD64"
+  },
+  "tools": {
+    "python": {
+      "status": "available",
+      "version": "3.12.10"
+    },
+    "go": {
+      "status": "available",
+      "version": "1.26.10"
+    },
+    "wails": {
+      "status": "available",
+      "version": "3.0.0"
+    },
+    "webview2": {
+      "status": "unavailable",
+      "version": null
+    }
+  },
+  "artifacts": {
+    "gui": {
+      "status": "available",
+      "sha256": "9df813d9233868b0f0f8ad9ec8a731bcf2b15d47d60ccbb5e111a04836f80fa8"
+    },
+    "runtime": {
+      "status": "available",
+      "sha256": "07a332b714a3c0eee047a22a9c0ea749b64df33e4e1ff6d28a8c7f9ef943ce10"
+    },
+    "native_test": {
+      "status": "available",
+      "sha256": "a2574c331bad4dcd21aa53cd0f19b6b2e6328287e690ae34e4548c1e913e536e"
+    }
+  },
+  "tests": [
+    {
+      "scenario": "delayed_listener_same_probe_204",
+      "outcome": "PASS"
+    },
+    {
+      "scenario": "port_only_not_healthy",
+      "outcome": "PASS"
+    },
+    {
+      "scenario": "http_200_503_redirect_close_fail_once",
+      "outcome": "PASS"
+    },
+    {
+      "scenario": "untrusted_tls_rejected",
+      "outcome": "PASS"
+    },
+    {
+      "scenario": "never_ready_total_five_seconds",
+      "outcome": "PASS"
+    },
+    {
+      "scenario": "cancellation_readiness_and_http",
+      "outcome": "PASS"
+    },
+    {
+      "scenario": "shared_readiness_http_deadline",
+      "outcome": "PASS"
+    },
+    {
+      "scenario": "old_immediate_dial_regression_fails_as_expected",
+      "outcome": "PASS"
+    },
+    {
+      "scenario": "full_production_go_suite_and_vet",
+      "outcome": "PASS"
+    },
+    {
+      "scenario": "production_wails_build",
+      "outcome": "PASS"
+    }
+  ],
+  "result": "PASS",
+  "failure_category": null,
+  "cleanup": {
+    "status": "PASS",
+    "checks": {
+      "three_native_sessions_disconnected": true,
+      "isolated_store_removed": true,
+      "verification_executable_outside_package": true
+    }
+  },
+  "record_kind": "post_execution_snapshot",
+  "source_sha256": {
+    "internal/core/process.go": "7604ba2ce278e24cb5857862ed3bda140fced6a046b2ec620a44b7e4489a6ee4",
+    "internal/core/process_probe_test.go": "6883438e79f53ba31c6e723f944c432920b9dab2b37225e2135cbfc17a78de74"
+  },
+  "native_test_source_sha256": "a9b2d276c8c92a221508a54d11b999b58072b8a6342af79fb30c06f18d5063cb",
+  "first_real_health_checks": [
+    {
+      "attempt": 1,
+      "state": "Connected",
+      "network_health": "healthy",
+      "elapsed_from_connect_ms": 3037
+    },
+    {
+      "attempt": 2,
+      "state": "Connected",
+      "network_health": "healthy",
+      "elapsed_from_connect_ms": 3128
+    },
+    {
+      "attempt": 3,
+      "state": "Connected",
+      "network_health": "healthy",
+      "elapsed_from_connect_ms": 1401
+    }
+  ],
+  "unrelated_generated_binding_bytes_preserved": true
+}

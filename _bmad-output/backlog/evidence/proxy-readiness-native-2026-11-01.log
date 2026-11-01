@@ -1,0 +1,6 @@
+=== RUN   TestOwnedRealProfileInitialHealth
+INITIAL_HEALTH attempt=1 state=Connected health=healthy elapsed_ms=3037
+INITIAL_HEALTH attempt=2 state=Connected health=healthy elapsed_ms=3128
+INITIAL_HEALTH attempt=3 state=Connected health=healthy elapsed_ms=1401
+--- PASS: TestOwnedRealProfileInitialHealth (7.68s)
+PASS

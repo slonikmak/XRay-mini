@@ -50,7 +50,7 @@ save profiles or start Xray.
 
 ## Status and safety
 
-`Connecting` → `Connected` only after a real HTTPS request through the local HTTP proxy. A probe has a **5 second timeout**, runs serially every **30 seconds**, and uses `https://www.gstatic.com/generate_204`. Two consecutive failures show `Degraded`; success resets the count. One destination cannot prove every destination works. Xray is not automatically restarted. `lastCheckedAt` records the last completed probe.
+`Connecting` → `Connected` only after a real HTTPS request through the local HTTP proxy. The probe allows the local proxy listener to become ready within its same five-second budget, then uses that connection for the control request; an open port alone never counts as success. A probe has a **5 second timeout**, runs serially every **30 seconds**, and uses `https://www.gstatic.com/generate_204`. Two consecutive failures show `Degraded`; success resets the count. One destination cannot prove every destination works. Xray is not automatically restarted. `lastCheckedAt` records the last completed probe.
 
 Profiles use Windows DPAPI. Runtime JSON is briefly plaintext in a private DACL-protected directory; normal cleanup removes it. An exclusive per-data-directory OS lock prevents another instance from deleting an active session; startup removes stale `runtime-*` after acquiring that lock. This is not secure disk erasure, nor protection against a compromised user/admin. Non-Windows storage is development-only, not DPAPI-equivalent.
 
