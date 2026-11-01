@@ -1,0 +1,91 @@
+{
+  "schema_version": 1,
+  "started_at_utc": "2026-11-01T16:31:03.822177+00:00",
+  "finished_at_utc": "2026-11-01T16:31:07.542396+00:00",
+  "command": [
+    "authorized_subscription_proxy_smoke"
+  ],
+  "scope": "windows11-user-endpoint-smoke",
+  "app": {
+    "status": "available",
+    "revision": "95b13846a33064b98d09c1a0d866196b7d676d55",
+    "dirty": true
+  },
+  "environment": {
+    "system": "Windows",
+    "release": "11",
+    "version": "10.0.26300",
+    "machine": "AMD64"
+  },
+  "tools": {
+    "python": {
+      "status": "available",
+      "version": "3.12.10"
+    },
+    "go": {
+      "status": "available",
+      "version": "1.26.10"
+    },
+    "wails": {
+      "status": "available",
+      "version": "3.0.0"
+    },
+    "webview2": {
+      "status": "unavailable",
+      "version": null
+    },
+    "curl": {
+      "status": "available",
+      "version": "8.21.0"
+    }
+  },
+  "artifacts": {
+    "gui": {
+      "status": "available",
+      "sha256": "8dd510de3d9c6f451fdde08caf7623ac89b2ce45dc5b39af1563ea22fedc1ad7"
+    },
+    "runtime": {
+      "status": "available",
+      "sha256": "07a332b714a3c0eee047a22a9c0ea749b64df33e4e1ff6d28a8c7f9ef943ce10"
+    }
+  },
+  "tests": [
+    {
+      "scenario": "direct-egress-baseline",
+      "outcome": "PASS"
+    },
+    {
+      "scenario": "http-external-https-204",
+      "outcome": "PASS",
+      "curl_exit": 0,
+      "http_status": "204"
+    },
+    {
+      "scenario": "http-external-egress-response",
+      "outcome": "PASS",
+      "curl_exit": 0,
+      "ip_different_from_direct": true
+    },
+    {
+      "scenario": "socks5-external-https-204",
+      "outcome": "PASS",
+      "curl_exit": 0,
+      "http_status": "204"
+    },
+    {
+      "scenario": "socks5-external-egress-response",
+      "outcome": "PASS",
+      "curl_exit": 0,
+      "ip_different_from_direct": true
+    }
+  ],
+  "result": "PASS",
+  "failure_category": null,
+  "cleanup": {
+    "status": "PASS",
+    "checks": {
+      "curl_requests_completed": true,
+      "no_profile_data_written": true
+    }
+  }
+}
