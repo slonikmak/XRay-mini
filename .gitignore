@@ -12,3 +12,7 @@
 .task/
 __pycache__/
 /_bmad/render/
+
+# Generated verification reports and unsigned demo packages.
+/artifacts/
+/dist-demo/

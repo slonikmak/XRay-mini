@@ -1,0 +1,18 @@
+Xray Mini — unsigned Windows 11 x64 demonstration
+
+1. Extract the entire archive. Keep runtime/ beside XrayMini.exe.
+2. WebView2 must already be installed. Run XrayMini.exe without elevation.
+3. Import your own authorized, supported VLESS configuration or explicit link.
+   No live server configuration or credentials are included.
+4. Connect and wait for the real network check. A running process is not proof
+   of a working remote connection.
+5. Configure only the intended application to use:
+   SOCKS5 (TCP): 127.0.0.1:10808
+   HTTP proxy:   127.0.0.1:10809
+6. Disconnect when finished. Retry stop is available for retained cleanup.
+
+This is NOT a system-wide VPN: no TUN, kill switch or system-proxy changes.
+Do not disable Windows security for an unsigned executable.
+manifest.json records source identity and hashes, not a signing certificate.
+Full Windows acceptance and the preflight-stop recovery case remain open.
+See the source repository's docs/VERIFICATION.md and docs/DEMO.md for scope.

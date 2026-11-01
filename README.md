@@ -1,85 +1,89 @@
-# Xray Mini · Windows local proxy
+# Xray Mini
 
-Go **1.26.10**, Wails **3.0.0**, React/TypeScript. Windows 11 **x64** only. This is a local SOCKS5/HTTP proxy, **not a system VPN**: no TUN, system proxy changes, kill switch, auto-update or administrator privileges.
+**A Windows desktop networking client — Go, Wails and TypeScript, built with AI-assisted development and specification-driven checks.**
 
-## Build and package
+Xray Mini manages a separate Xray-core process and provides local HTTP/SOCKS5 proxies. It supports standalone **VLESS + RAW/REALITY**, **XHTTP/REALITY** and **XHTTP/TLS** configurations, with JSON and explicit subscription/link import.
 
-Install Go, Node.js 22+, Python 3, Wails prerequisites and Microsoft WebView2 Runtime. From this directory:
+**Windows 11 x64 · Wails 3.0.0 · Go 1.26.10 · React/TypeScript**
+
+> This is a **local proxy client, not a system-wide VPN**. Applications must use its loopback proxies explicitly. There is no TUN, system-proxy change, kill switch, automatic restart or automatic update. The demo is unsigned and full product acceptance is still open.
+
+## Start here
+
+- **Review the engineering:** [code map and design decisions](docs/CODEMAP.md).
+- **See what to demonstrate:** [guided demo and recording checklist](docs/DEMO.md).
+- **Build or run it:** [build, package and CI instructions](docs/BUILD.md).
+- **Understand the evidence:** [verification](docs/VERIFICATION.md), [current acceptance scope](docs/ACCEPTANCE-SCOPE.md) and [dependency review](docs/DEPENDENCY-REVIEW.md).
+
+The CI workflow produces a complete package as an Actions artifact when its Windows job succeeds. A separate manual workflow creates a **draft prerelease only after all CI jobs pass**. A recorded walkthrough is not published in this README yet; the demo guide identifies the real Windows scenarios to capture. Private-repository access is still required.
+
+## What the application does
+
+Import and preview a configuration, choose a profile, connect, and configure a browser or another application to use `127.0.0.1:10808` (SOCKS5, TCP) or `127.0.0.1:10809` (HTTP). The client verifies and starts its pinned Xray executable, checks an HTTPS request through the proxy and reports process state separately from network health. Disconnect owns the full stop/wait/cleanup sequence.
+
+Profile import is deliberately restrictive: exactly one standalone VLESS outbound is selected; source inbounds, routing and unrelated sections are discarded with an explicit preview. Both local listeners route through the selected outbound, without a direct fallback. Subscription loading is manual, bounded and separate from saving or connecting; candidate previews expire and can be canceled.
+
+## What makes this more than a Connect button
+
+**Concurrency with explicit ownership.** A single event loop owns session state. Workers send session-tagged events; snapshots are published atomically. A slow UI subscriber does not block connection control. Queues and diagnostics are bounded, and one owner waits for the child process.
+
+**Failure handling, not just the happy path.** Process exit is terminal within a session, so late health results cannot resurrect it. Failed working-child termination can be retried explicitly without a second Wait. Resources remain owned until cleanup is confirmed. Stop/Retry stop stays accessible inside profile dialogs during pending saves.
+
+**Actual Windows integration.** The client uses Job Objects, restricted handle inheritance, DPAPI, directory ACLs and an exclusive storage lock. Preflight and working Xray are created inside a kill-on-close job. The bundled runtime is digest-checked before execution.
+
+**UI backed by authoritative state.** React sends commands through Wails bindings and renders Go snapshots/events with revision ordering. It does not infer connection success from a button click or a running process.
+
+**Reviewable AI-assisted delivery.** Requirements, architecture decisions, tests, findings and fixes are preserved. One useful example is the regression from `ProcessExited` to a late `Connected`: the fix required a state-machine invariant, not another mutex.
+
+## Architecture at a glance
+
+```text
+React / TypeScript
+  commands | snapshots + revisioned events
+           v
+Wails facade (app.go)
+           v
+Service.loop — single owner of session state
+  | commands/events       | atomic snapshots
+  |                       +--> bounded notification publisher --> UI
+  +--> session supervisor --> one Wait / explicit stop retry / cleanup
+  +--> serial health probe --> local proxy --> selected VLESS peer
+  +--> profile repository --> DPAPI + private files + instance lock
+                           |
+                           v
+                    external xray.exe
+                    HTTP / SOCKS5 -> REALITY / XHTTP -> remote peer
+```
+
+User traffic belongs to Xray-core, not the React UI or the Go control plane. Detailed responsibilities and source links are in the [code map](docs/CODEMAP.md).
+
+## Authorship and scope
+
+Created by **Anton Mashkov** as a focused desktop/networking portfolio project. AI agents are a principal implementation tool; the project makes requirements, integration decisions, review findings and acceptance boundaries inspectable. It is not a claim that all code was handwritten or that the author implemented VLESS, REALITY, XHTTP or cryptography: those are provided by Xray-core.
+
+The project demonstrates a concrete Go/Windows client and a quality-control process. It does not establish years of commercial Go experience, large-scale VPN operations or expertise in Windows routing/TUN drivers.
+
+## Verification: what is and is not established
+
+The repository preserves a **1 November 2026 Windows 11 verification report** for the termination/recovery changes: native Go tests and vet, 42 frontend tests, repeated service regressions, a Windows cleanup-refusal case, three real-core loopback transports and a production build. A separate earlier report covers one external XHTTP/TLS endpoint through the packaged GUI. These are recorded runs for identified source/artifact snapshots, not proof for every future commit.
+
+- [Termination/recovery evidence](_bmad-output/backlog/evidence/concurrency-recovery-2026-11-01.md)
+- [External XHTTP/TLS demonstration evidence](_bmad-output/backlog/evidence/subscription-acceptance-2026-11-01.md)
+- [Full verification and remaining checks](docs/VERIFICATION.md)
+
+Current CI results live in Actions. **A configured workflow is not a passing run**, and a Windows Server runner is not Windows 11 interactive acceptance. CI does not use personal subscription URLs, private peers or credentials.
+
+Open boundaries include cross-user DPAPI, remaining Windows GUI/stress and external REALITY checks, and recovery after failed termination of the separate preflight child. The prior npm build log also reported advisories whose applicability must be established; the new dependency job does not suppress them. See [dependency review](docs/DEPENDENCY-REVIEW.md).
+
+## Build and demo package
 
 ```powershell
 go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0
 wails3 doctor
-wails3 build
-python scripts/package_runtime.py bin
-python scripts/package_runtime.py --verify bin
+wails3 task package
+python scripts/package_demo.py
 ```
 
-Ship **all of `bin/`**, including `XrayMini.exe`, `runtime/xray.exe`, its license and notice. The packaging script downloads the official pinned **Xray 26.10.29** archive, verifies both archive and executable SHA-256, and installs only the executable and notices. No unknown binary is executed to determine its version. Runtime checks its exact executable digest before **each** preflight and working-process launch. No arbitrary executable path is accepted. The application is unsigned; native Windows acceptance remains pending (see verification).
+Use a clean checkout and the prerequisites in [BUILD.md](docs/BUILD.md). Run `.\bin\XrayMini.exe`; plain `go run .` does not place the pinned runtime beside the executable. The archive includes the complete application/runtime layout, notices, a source-revision manifest and a quick-start guide. It contains **no saved profiles or live server credentials**.
 
-The offline `--verify` command checks the complete package and reports file hashes;
-it does not execute the GUI or runtime. Runtime installation alone reports only
-runtime readiness. `wails3 task package` finishes with the complete-package check.
-
-For development, the same `runtime/` directory must be beside the executable Wails actually launches. Do not replace the pin with an arbitrary local binary. The displayed version describes the pinned package, not a claim that a missing executable is installed.
-
-Run the packaged app with `.\bin\XrayMini.exe`. For development use
-`wails3 task dev`, which builds and runs the app in `bin/`. The workspace Zed
-Go main runnable uses this task. Plain `go run .` creates a temporary executable
-without the adjacent runtime and cannot connect; do not use it to launch the app.
-
-## Use
-
-1. Import client Xray JSON containing exactly **one VLESS outbound with streamSettings**, or choose **Subscription or VLESS link**. For a subscription, explicitly load an HTTPS URL returning a plain or Base64 VLESS list; alternatively paste one VLESS link. Choose one candidate and import it, then use Connect separately. Examples contain placeholders, not working server credentials.
-2. Review and acknowledge the import preview: source inbounds, routing, other outbounds and other top-level sections are discarded. Only the standalone selected outbound is retained. Ambiguous selections, duplicate JSON keys and unsupported external dependencies/local resource references are rejected.
-3. Connect. Configure the desired application manually for **SOCKS5 `127.0.0.1:10808`** (TCP only) or **HTTP `127.0.0.1:10809`**. Both are fixed loopback listeners. Runtime routing sends both through the single selected VLESS outbound; no direct outbound is included.
-4. Disconnect before changing the active profile. Profiles can be renamed and deleted.
-
-RAW/REALITY, XHTTP/REALITY and XHTTP/TLS fields are preserved in the supported standalone subset. Import and successful `run -test` do **not** prove transport connectivity.
-
-Manual subscription loading uses normal TLS verification, a 15-second total limit,
-a 2 MiB response limit, at most 100 profiles and 64 KiB per link. Redirects are
-rejected. Supported links use `encryption=none`; XHTTP path, host, mode and the
-self-contained `extra.xmux` fields are preserved. Unsupported or duplicate
-parameters are rejected, including split-download dependencies. Other XHTTP extra
-fields can still be imported through the existing complete JSON flow when supported.
-Candidate previews contain only names, opaque IDs and transport labels and expire
-after five minutes. Editing the source, canceling, replacing the preview, importing
-or closing the app discards it. Source URLs are never saved and subscriptions do not
-refresh automatically. Loading contacts only the entered HTTPS source and does not
-save profiles or start Xray.
-
-## Status and safety
-
-`Connecting` → `Connected` only after a real HTTPS request through the local HTTP proxy. The probe allows the local proxy listener to become ready within its same five-second budget, then uses that connection for the control request; an open port alone never counts as success. A probe has a **5 second timeout**, runs serially every **30 seconds**, and uses `https://www.gstatic.com/generate_204`. Two consecutive failures show `Degraded`; success resets the count. One destination cannot prove every destination works. Xray is not automatically restarted. `lastCheckedAt` records the last completed probe.
-
-Profiles use Windows DPAPI. Runtime JSON is briefly plaintext in a private DACL-protected directory; normal cleanup removes it. An exclusive per-data-directory OS lock prevents another instance from deleting an active session; startup removes stale `runtime-*` after acquiring that lock. This is not secure disk erasure, nor protection against a compromised user/admin. Non-Windows storage is development-only, not DPAPI-equivalent.
-
-If stopping or runtime cleanup fails, another working Xray is not admitted.
-Remove any external file block and use Retry stop to request one new stop/cleanup
-attempt; Disconnect or Close can retry through the API. Connect becomes available
-after cleanup releases the session. Close reports unconfirmed
-session cleanup after five seconds and bounds notification drain to 250ms. A blocked
-notification callback may remain until it returns, but does not cause more callback
-workers to be spawned or turn unconfirmed process cleanup into success.
-
-Preflight and working Xray are created **inside** a kill-on-close Windows Job Object using `PROC_THREAD_ATTRIBUTE_JOB_LIST`; there is no create-then-assign crash window. Native crash/DPAPI/ACL/WebView2 verification still must run on Windows.
-
-Diagnostics retain only bounded application messages and fixed Xray stdout/stderr-presence categories. Untrusted Xray output is drained but never displayed or retained. Server addresses, UUIDs, URLs and raw configuration are not copied into diagnostics.
-
-## Tests
-
-```sh
-go test -race ./internal/core
-go vet ./internal/core
-cd frontend
-npm ci
-npm run typecheck
-npm test
-npm run build
-```
-
-Bindings are generated by `wails3 task bindings` (also part of build). Browser mode without Wails reports backend unavailable, not a fake connection.
-
-See [architecture](docs/ARCHITECTURE.md), [verification and pending acceptance](docs/VERIFICATION.md), and [audit traceability](docs/AUDIT-FIXES.md). The authoritative [specification](docs/xray-mini-spec-v0.2.ru.md) includes manual import; the [baseline audit](docs/xray-mini-audit-v0.2.ru.md) describes the old commit, not the fixed tree.
-
-For the code-to-spec assessment at `910c353`, source research and the next acceptance work, start with the [brownfield guide](docs/BROWNFIELD.md).
+Do not disable Windows protection to run an unsigned demo. A hash identifies bytes; it is not a code-signing certificate or a security audit.
