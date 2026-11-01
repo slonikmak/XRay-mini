@@ -15,6 +15,7 @@ import (
 )
 
 var kernel32 = syscall.NewLazyDLL("kernel32.dll")
+var terminateJob = kernel32.NewProc("TerminateJobObject")
 var createJob = kernel32.NewProc("CreateJobObjectW")
 var setJobInfo = kernel32.NewProc("SetInformationJobObject")
 var initAttributes = kernel32.NewProc("InitializeProcThreadAttributeList")
@@ -69,7 +70,13 @@ func (c *windowsChild) Kill() error {
 	if c.process == 0 {
 		return nil
 	}
-	return syscall.TerminateProcess(c.process, 1)
+	// The job handle has its own termination rights, independent of the process
+	// handle. Keep both handles until the single Wait confirms process exit.
+	ok, _, _ := terminateJob.Call(uintptr(c.job), 1)
+	if ok == 0 {
+		return errors.New("cannot terminate Xray process job")
+	}
+	return nil
 }
 func (c *windowsChild) Wait() error {
 	c.once.Do(func() {

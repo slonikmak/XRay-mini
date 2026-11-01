@@ -1,4 +1,16 @@
-# Verification after audit fixes · 2026-10-30
+# Verification — native Windows update, 2026-11-01
+
+Windows 11 Home amd64 10.0.26300.9711, normal user. Go 1.26.10, Wails 3.0.0; actual owned WebView2 child 156.0.4314.58. The dirty source HEAD, exact artifact/source hashes and scenario outcomes are preserved in the [execution report](../_bmad-output/backlog/evidence/autonomous-execution-2026-11-01.md), not attributed to the old clean baseline.
+
+PASS: native production Go suite and vet, frontend typecheck/23 tests, Python packaging/provenance 25 tests, production Wails build and offline complete-package check. Native real-core loopback passed all three transports through both proxies, stopped-peer no-bypass, wrong TLS leaf pin, duplicate Connect, health recovery and cleanup. Packaged GUI startup error, import, unhealthy running status, forced parent exit, persisted profile/relaunch and orphan cleanup were inspected on this host. [Windows system detail](../_bmad-output/backlog/evidence/windows-11-system.md) and [transport detail](../_bmad-output/backlog/evidence/native-windows-loopback-2026-11-01.md) distinguish their scope.
+
+**Full MVP acceptance is pending.** Windows 10, another account, missing-WebView2 isolation, external peers/egress and remaining full native GUI/stress scenarios are not passed. Native race instrumentation is unavailable without a Windows C toolchain. Existing Linux race results below remain historical Linux evidence.
+
+Repeat package check: `python scripts/package_runtime.py --verify bin`. Repeat native loopback using the exact opt-in commands in its linked evidence; ordinary tests intentionally skip that case. The test executable is a verification artifact and is moved outside the distributable bin after the run.
+
+---
+
+# Historical verification after audit fixes · 2026-10-30
 
 ## Actual environment and verified checks
 

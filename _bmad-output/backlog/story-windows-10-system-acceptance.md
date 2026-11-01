@@ -4,7 +4,7 @@ type: story
 title: "Подтверждена системная приёмка Windows 10 x64"
 parent: none
 covers: []
-after: [4, 5, 6]
+after: [4, 5, 6, 11]
 refined: true
 hitl: true
 risk: high

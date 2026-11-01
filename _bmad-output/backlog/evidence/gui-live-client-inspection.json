@@ -1,0 +1,20 @@
+{
+  "scope": "owned native GUI controlled reject-peer",
+  "gui_pid": 15584,
+  "xray_child_count": 1,
+  "xray_child_pids": [
+    42480
+  ],
+  "listeners": [
+    {
+      "LocalAddress": "127.0.0.1",
+      "LocalPort": 10809,
+      "OwningProcess": 42480
+    },
+    {
+      "LocalAddress": "127.0.0.1",
+      "LocalPort": 10808,
+      "OwningProcess": 42480
+    }
+  ]
+}

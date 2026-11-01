@@ -1,0 +1,108 @@
+{
+  "schema_version": 1,
+  "started_at_utc": "2026-11-01T13:16:32.618641+00:00",
+  "finished_at_utc": "2026-11-01T13:16:36.122320+00:00",
+  "command": [
+    "post_execution_source_manifest"
+  ],
+  "scope": "windows11-execution-snapshot",
+  "app": {
+    "status": "available",
+    "revision": "ee4832faa679f632b0bda850fe6c6f288dedcd24",
+    "dirty": true
+  },
+  "environment": {
+    "system": "Windows",
+    "release": "11",
+    "version": "10.0.26300",
+    "machine": "AMD64"
+  },
+  "tools": {
+    "python": {
+      "status": "available",
+      "version": "3.12.10"
+    },
+    "go": {
+      "status": "available",
+      "version": "1.26.10"
+    },
+    "wails": {
+      "status": "available",
+      "version": "3.0.0"
+    },
+    "webview2": {
+      "status": "available",
+      "version": "156.0.4314.58"
+    }
+  },
+  "artifacts": {
+    "gui": {
+      "status": "available",
+      "sha256": "37b1a13be3974fbd072d861e1fdac7375bef1a7e2940a3f5e118ae2e3318638a"
+    },
+    "runtime": {
+      "status": "available",
+      "sha256": "07a332b714a3c0eee047a22a9c0ea749b64df33e4e1ff6d28a8c7f9ef943ce10"
+    },
+    "notice": {
+      "status": "available",
+      "sha256": "2e233631cb020c2889d6a8fc1276b7ff3973576fa32edb0366f8ff41388ae6ea"
+    },
+    "license": {
+      "status": "available",
+      "sha256": "1f256ecad192880510e84ad60474eab7589218784b9a50bc7ceee34c2b91f1d5"
+    }
+  },
+  "tests": [
+    {
+      "scenario": "final-go-production-suite-and-vet",
+      "outcome": "PASS"
+    },
+    {
+      "scenario": "frontend-typecheck-23-tests",
+      "outcome": "PASS"
+    },
+    {
+      "scenario": "python-25-tests",
+      "outcome": "PASS"
+    },
+    {
+      "scenario": "final-wails-production-build",
+      "outcome": "PASS"
+    },
+    {
+      "scenario": "offline-package-verifier",
+      "outcome": "PASS"
+    },
+    {
+      "scenario": "native-windows-race",
+      "outcome": "SKIP"
+    }
+  ],
+  "result": "SKIP",
+  "failure_category": null,
+  "cleanup": {
+    "status": "PASS",
+    "checks": {
+      "owned_gui_and_runtime_exited": true,
+      "owned_gui_appdata_removed": true,
+      "test_executable_outside_deliverable": true
+    }
+  },
+  "record_kind": "post_execution_snapshot_not_new_test_run",
+  "source_sha256": {
+    "app.go": "d4bd2d2580b850de6fc43b5b7532c8ccfd3a8fc3dce37763cbac01ece2fad0cf",
+    "app_test.go": "84dce1b574a033376db7037e2dd00071fe4cf97a63daf39aa9137b33c07b4949",
+    "frontend/src/App.tsx": "8cf7af9c21b3a508e5ee60afd910117e86011d26f0326bf4a0e42e91800f16d4",
+    "frontend/src/App.test.tsx": "5846406e8e6f0b6acc93ed7e3e0b22962ea31e739af049e4d2e07c956c8a10f8",
+    "internal/core/service.go": "17b61122147b04bd8f47c3b3dd94eaa348971e67c49fdd34dc084afd185a586d",
+    "internal/core/process_windows.go": "137a580f7c4cbbfbba9488f8190d5c6c23e6148d8f2f14f9e9cf24ad70e9482e",
+    "internal/core/service_test.go": "c6edfb141c49e3e9e4b18ca13ecdd40b0323d2972076a687f66d2d7856b267ef",
+    "internal/core/process_windows_test.go": "6611f9860b53232fab15ccdf906cc33b315f266c18e36812dd10660fcaabbb9e",
+    "internal/core/native_transport_windows_test.go": "2f6672dd14d692dc993f2576043e2528c37d6e637965c644235ba49fcac00a70",
+    "scripts/package_runtime.py": "b8cb41aa8e60789f160e5ea2e4e320fd2e4f5650544affdba59f20a71b3048fc",
+    "scripts/run_evidence.py": "c19e62aa6395cee3f3bb504983649db0ff9364607bb64155a02caa381b9f0147",
+    "integration/transports.py": "7b13673ba345d5df5370823241734b7791eafbf77302c6b599a7c3271bcde9fb"
+  },
+  "historical_linux_result_sha256": "425af0ed31a302348af8b3a325a136386ba81591588612bc1f095718825f4b25"
+}

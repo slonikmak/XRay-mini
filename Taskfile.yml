@@ -44,6 +44,7 @@ tasks:
     cmds:
       - task: build
       - task: runtime
+      - python scripts/package_runtime.py --verify bin
   dev:
     cmds:
       - wails3 dev -config ./build/config.yml -port {{.VITE_PORT}}

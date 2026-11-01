@@ -21,6 +21,34 @@ beforeEach(() => {
 });
 afterEach(() => { cleanup(); vi.mocked(desktop).mockReturnValue(undefined); vi.restoreAllMocks(); });
 describe('desktop UI', () => {
+  it('shows safe startup status even when profiles fail to refresh', async () => {
+    const message = 'another Xray Mini instance owns this profile directory';
+    vi.mocked(api.ListProfiles).mockRejectedValue(new Error('profile read failed'));
+    vi.mocked(api.GetStatus).mockResolvedValue({ ...initialStatus, state: 'Error', processState: 'error', message });
+    render(<App/>);
+    await screen.findByText(message);
+    expect((screen.getByRole('button', { name: 'Import profile' }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.queryByText('Desktop bridge unavailable')).toBeNull();
+  });
+  it('applies status without waiting for a pending profile read', async () => {
+    let resolveProfiles!: (profiles: typeof profile[]) => void;
+    vi.mocked(api.ListProfiles).mockReturnValue(new Promise(resolve => { resolveProfiles = resolve; }));
+    vi.mocked(api.GetStatus).mockResolvedValue({ ...initialStatus, revision: 1, state: 'Connected', processState: 'running', networkHealth: 'healthy' });
+    render(<App/>);
+    await screen.findByText('Proxy is ready.');
+    await act(async () => resolveProfiles([profile]));
+  });
+  it('recognizes a late native bridge even when backend startup failed', async () => {
+    vi.mocked(desktop).mockReturnValue(undefined);
+    render(<App/>);
+    expect(screen.getByText('Desktop bridge unavailable')).toBeTruthy();
+    vi.mocked(desktop).mockReturnValue(api);
+    vi.mocked(api.ListProfiles).mockRejectedValue(new Error('unavailable'));
+    vi.mocked(api.GetStatus).mockResolvedValue({ ...initialStatus, state: 'Error', processState: 'error', message: 'cannot protect profile directory' });
+    fireEvent.focus(window);
+    await screen.findByText('cannot protect profile directory');
+    await waitFor(() => expect(screen.queryByText('Desktop bridge unavailable')).toBeNull());
+  });
   it('shows an honest empty browser preview without simulated profiles or network success', () => {
     vi.mocked(desktop).mockReturnValue(undefined); render(<App/>);
     expect(screen.getByText('Desktop bridge unavailable')).toBeTruthy();

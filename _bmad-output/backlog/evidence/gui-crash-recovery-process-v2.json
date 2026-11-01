@@ -1,0 +1,87 @@
+{
+  "schema_version": 1,
+  "started_at_utc": "2026-11-01T13:05:23.492832+00:00",
+  "finished_at_utc": "2026-11-01T13:11:37.245910+00:00",
+  "command": [
+    "native_gui_crash_recovery_fixture_v2"
+  ],
+  "scope": "windows11-gui-crash-recovery-v2",
+  "app": {
+    "status": "available",
+    "revision": "ee4832faa679f632b0bda850fe6c6f288dedcd24",
+    "dirty": true
+  },
+  "environment": {
+    "system": "Windows",
+    "release": "11",
+    "version": "10.0.26300",
+    "machine": "AMD64"
+  },
+  "tools": {
+    "python": {
+      "status": "available",
+      "version": "3.12.10"
+    },
+    "go": {
+      "status": "available",
+      "version": "1.26.10"
+    },
+    "wails": {
+      "status": "available",
+      "version": "3.0.0"
+    },
+    "webview2": {
+      "status": "unavailable",
+      "version": null
+    }
+  },
+  "artifacts": {
+    "gui": {
+      "status": "available",
+      "sha256": "37b1a13be3974fbd072d861e1fdac7375bef1a7e2940a3f5e118ae2e3318638a"
+    },
+    "runtime": {
+      "status": "available",
+      "sha256": "07a332b714a3c0eee047a22a9c0ea749b64df33e4e1ff6d28a8c7f9ef943ce10"
+    }
+  },
+  "tests": [
+    {
+      "scenario": "forced-owned-parent-exit",
+      "outcome": "PASS",
+      "exit_code": 4294967295
+    },
+    {
+      "scenario": "crash-runtime-residue-present",
+      "outcome": "PASS",
+      "count": 1
+    },
+    {
+      "scenario": "persisted-profile-not-plaintext",
+      "outcome": "PASS"
+    },
+    {
+      "scenario": "proxy-listeners-released-after-parent-exit",
+      "outcome": "PASS"
+    },
+    {
+      "scenario": "startup-removes-orphan-runtime",
+      "outcome": "PASS"
+    },
+    {
+      "scenario": "normal-owned-window-close",
+      "outcome": "PASS",
+      "exit_code": 0
+    }
+  ],
+  "result": "PASS",
+  "failure_category": null,
+  "cleanup": {
+    "status": "PASS",
+    "checks": {
+      "owned_gui_exited": true,
+      "owned_appdata_removed": true,
+      "reject_peer_joined": true
+    }
+  }
+}

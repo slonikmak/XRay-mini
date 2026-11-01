@@ -1,0 +1,12 @@
+{
+  "scope": "native startup failure, pre-existing binary; source commit not embedded",
+  "artifact_sha256": "4db3a785ae625c5efa33b286c4fb19ea5f51f84c5be2eb1a843b557204b89068",
+  "os": "Windows11 10.0.26300 amd64",
+  "appdata_isolated": true,
+  "exclusive_store_owner": true,
+  "exit_code": 1,
+  "elapsed_seconds": 0.282,
+  "expected_fixed_error_visible_in_stderr": true,
+  "stderr": "Nov  1 13:22:10.160 INF Build Info: Wails=v3.0.0 Compiler=go1.26.10 -buildmode=exe -compiler=gc -gcflags=all=-l CGO_ENABLED=0 GOARCH=amd64 GOOS=windows GOAMD64=v1\nNov  1 13:22:10.166 INF AssetServer Info: middleware=true handler=true\nNov  1 13:22:10.165 INF Platform Info: Go-WebView2Loader=true WebView2=156.0.4314.58 ID=26H2 Name=Windows 10 Home Version=2009 (Build: 26300) Branding=Windows 11 Home\n2026/11/01 13:22:10 Unable to launch desktop window: error starting service 'main.App': another Xray Mini instance owns this profile directory\n",
+  "cleanup": "owned child exited; lock released; temp directory removed after capture"
+}

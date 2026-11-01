@@ -43,18 +43,24 @@ export default function App() {
   const pollBusy = useRef(false);
   const selected = profiles.find(p => p.id === selectedId);
   const active = ['preparing', 'running', 'stopping'].includes(status.processState);
+  const backendUnavailable = status.state === 'Error' && !status.sessionId;
   const transition = status.processState === 'preparing' || status.processState === 'stopping';
 
   const refresh = useCallback(async (force = false) => {
     const api = desktop();
     if (!api) { if (alive.current) setAvailable(false); return; }
+    if (alive.current) setAvailable(true);
     if (pollBusy.current && !force) return;
     const version = ++revision.current;
     pollBusy.current = true;
     try {
-      const [nextProfiles, nextStatus, nextLogs] = await Promise.all([api.ListProfiles(), api.GetStatus(), api.GetRecentLogs(100)]);
+      // A failed or slow profile/log read must not hide the backend's safe status.
+      const statusRequest = api.GetStatus().then(nextStatus => {
+        if (alive.current && version === revision.current) setStatus(previous => nextStatus.revision < previous.revision ? previous : nextStatus);
+      });
+      const [nextProfiles, , nextLogs] = await Promise.all([api.ListProfiles(), statusRequest, api.GetRecentLogs(100)]);
       if (!alive.current || version !== revision.current) return;
-      setAvailable(true); setSyncError(''); setProfiles(nextProfiles || []); setStatus(previous => nextStatus.revision < previous.revision ? previous : nextStatus); setLogs(nextLogs || []);
+      setAvailable(true); setSyncError(''); setProfiles(nextProfiles || []); setLogs(nextLogs || []);
       setSelectedId(id => (nextProfiles || []).some(p => p.id === id) ? id : (nextProfiles || [])[0]?.id || '');
     } catch { if (alive.current && version === revision.current) setSyncError('Unable to refresh desktop state. Try again; the process state shown may be out of date.'); }
     finally { if (version === revision.current) pollBusy.current = false; }
@@ -129,7 +135,7 @@ export default function App() {
         </button>)}
         {!profiles.length && <div className="empty-sidebar"><span className="empty-glyph">⌘</span><p>A little space for<br/>your connections.</p><small>Import your first Xray profile.</small></div>}
       </nav>
-      <button className="add-profile" disabled={!available || !!busy} onClick={() => { setError(''); setModal('import'); }}><Icon name="plus"/>Import profile</button>
+      <button className="add-profile" disabled={!available || !!busy || backendUnavailable} onClick={() => { setError(''); setModal('import'); }}><Icon name="plus"/>Import profile</button>
       <div className="sidebar-bottom"><span className="small-dot"/> Local-first. Yours only.<small>Xray Mini · v0.1</small></div>
     </aside>
 

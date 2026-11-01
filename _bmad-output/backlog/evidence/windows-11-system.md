@@ -1,0 +1,13 @@
+# Windows 11 system acceptance — PARTIAL / BLOCKED
+
+2026-11-01. Host: Windows 11 Home amd64 10.0.26300.9711/26H2, normal user; Go 1.26.10, Wails 3.0.0. Actual child WebView2 156.0.4314.58 observed separately in [system inspection](gui-system-inspection.json). Records whose tool field says unavailable mean version collection was not performed by that recorder, not that WebView2 was absent.
+
+PASS: native core suite including Job containment, parent crash, executable lock, cleanup denial/retry, once-only Wait and bounded notification shutdown; production facade tests; real packaged window rendering; invalid JSON explanatory rejection and valid synthetic profile import; actual one-child Running/Connecting then Degraded against a rejecting loopback peer; live listeners only 127.0.0.1:10808 and :10809 ([inspection](gui-live-client-inspection.json)).
+
+PASS: isolated failed-start window exposed safe lock cause, Error and disabled Connect without the browser-preview banner ([record](gui-startup-error-process-v2.json)). The isolated directory had protected DACL, only current-user/SYSTEM allow entries. This is one directory observation, not a full file-by-file/cross-account acceptance.
+
+PASS: force-killed only the owned GUI with an actual working Xray. Both ports were rebindable after parent death. One residual runtime directory existed, profile ciphertext did not contain the synthetic UUID, and relaunch removed the runtime residue. Native UI inspection after relaunch showed the saved profile, Disconnected, process Not running, health Not verified and Connect available. Alt+F4 closed the second window normally with exit 0; owned APPDATA and local helper were removed/joined ([record](gui-crash-recovery-process-v2.json)). This proves same-account round-trip and crash recovery, not another account's inability to decrypt.
+
+First crash-controller attempt timed out before Connect during UI preparation. Its recovered FAIL record is retained ([attempt 1](gui-crash-controller-attempt1.json)); the separate second run above passed. No screenshots are persisted; observations came from live native window inspection.
+
+SKIP / not completed: another-account DPAPI denial; isolated missing-WebView2 behavior; repeated parent-death-during-creation stress and nested-job campaign; full native GUI kill-child/cancel-at-each-phase/port-occupancy/tampered-package/secret-export matrix; scale/accessibility sweep. Some lower-level cases are unit-tested, which does not imply the complete live-GUI campaign passed. No personal account, WebView2 installation, CA, route or OS proxy settings were changed. Full task 8 remains blocked.

@@ -8,7 +8,7 @@
 
 1. [Спецификация v0.2](xray-mini-spec-v0.2.ru.md) задаёт FR, ADR и acceptance criteria.
 2. [Сверка кода со спекой на 910c353](../_bmad-output/research-runtime-lifecycle-and-interfaces/spec-v0.2-compliance.ru.md)
-   показывает текущие механизмы, условные дефекты и оставшиеся проверки.
+   показывает механизмы и находки исходного snapshot; последующие исправления и проверки перечислены в [отчёте выполнения](../_bmad-output/backlog/evidence/autonomous-execution-2026-11-01.md).
 3. [Исследование исходников](../_bmad-output/research-runtime-lifecycle-and-interfaces/research-runtime-lifecycle-and-interfaces.md)
    содержит точные ссылки на snapshot, вопросы, границы и независимую проверку ключевых фактов.
 
@@ -25,15 +25,13 @@
 
 ## Следующая работа
 
-[Проект backlog из 10 задач](../_bmad-output/backlog-plan.ru.md) содержит критерии,
-зависимости и предложенный порядок; состав ожидает согласования, реализация не начата.
-
-Сначала определить поведение при ошибке удаления runtime и при блокирующем shutdown
-(F1/F2 в сверке). Затем выполнить предусмотренную Windows 10/11 приёмку, включая
-Job Object, DPAPI/DACL, WebView2, оба fixed ports и три транспорта через HTTP/SOCKS5.
-Для каждого реального прохода сохранять app commit, среду, package/runtime hashes,
-сценарии и результаты, включая SKIP/FAIL и cleanup. F3–F5 описывают отдельные ограничения
-диагностики и package failure; они не заменяют platform acceptance.
+[Согласованный backlog и результаты](../_bmad-output/backlog-plan.ru.md) содержат
+12 задач: исходные 10 и два необходимых продолжения исследования. Исправления
+lifecycle/startup, проверка поставки и provenance реализованы; native loopback и GUI
+проверены на доступной Windows 11. [Отчёт](../_bmad-output/backlog/evidence/autonomous-execution-2026-11-01.md)
+разделяет выполненные проверки и блокеры. Для завершения задач 7–10 нужны Windows 10,
+изолированная среда без WebView2, вторая учётная запись и разрешённые внешние peers/egress;
+локальный PASS не закрывает полную приёмку.
 
 Новых PRD или дублирующих ADR этот этап не создаёт: требования и архитектурные правила
 уже сформулированы. При изменении решения согласовать соответствующее правило спеки;

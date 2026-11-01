@@ -1,0 +1,64 @@
+{
+  "schema_version": 1,
+  "started_at_utc": "2026-11-01T12:55:42.006110+00:00",
+  "finished_at_utc": "2026-11-01T12:56:44.169810+00:00",
+  "command": [
+    "native_startup_failure_window_v2"
+  ],
+  "scope": "windows11-startup-error-window-v2",
+  "app": {
+    "status": "available",
+    "revision": "ee4832faa679f632b0bda850fe6c6f288dedcd24",
+    "dirty": true
+  },
+  "environment": {
+    "system": "Windows",
+    "release": "11",
+    "version": "10.0.26300",
+    "machine": "AMD64"
+  },
+  "tools": {
+    "python": {
+      "status": "available",
+      "version": "3.12.10"
+    },
+    "go": {
+      "status": "available",
+      "version": "1.26.10"
+    },
+    "wails": {
+      "status": "available",
+      "version": "3.0.0"
+    },
+    "webview2": {
+      "status": "unavailable",
+      "version": null
+    }
+  },
+  "artifacts": {
+    "gui": {
+      "status": "available",
+      "sha256": "37b1a13be3974fbd072d861e1fdac7375bef1a7e2940a3f5e118ae2e3318638a"
+    },
+    "runtime": {
+      "status": "available",
+      "sha256": "07a332b714a3c0eee047a22a9c0ea749b64df33e4e1ff6d28a8c7f9ef943ce10"
+    }
+  },
+  "tests": [
+    {
+      "scenario": "isolated-window-exit",
+      "outcome": "PASS",
+      "exit_code": 0
+    }
+  ],
+  "result": "PASS",
+  "failure_category": null,
+  "cleanup": {
+    "status": "PASS",
+    "checks": {
+      "owned_gui_exited": true,
+      "owned_appdata_removed": true
+    }
+  }
+}

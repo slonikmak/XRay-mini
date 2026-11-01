@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "started_at_utc": "2026-11-01T13:05:22.808249+00:00",
+  "finished_at_utc": "2026-11-01T13:05:23.491309+00:00",
+  "command": [
+    "recover_gui_controller_timeout"
+  ],
+  "scope": "gui-controller-timeout-recovered",
+  "app": {
+    "status": "available",
+    "revision": "ee4832faa679f632b0bda850fe6c6f288dedcd24",
+    "dirty": true
+  },
+  "environment": {
+    "system": "Windows",
+    "release": "11",
+    "version": "10.0.26300",
+    "machine": "AMD64"
+  },
+  "tools": {
+    "python": {
+      "status": "available",
+      "version": "3.12.10"
+    },
+    "go": {
+      "status": "unavailable",
+      "version": null
+    },
+    "wails": {
+      "status": "unavailable",
+      "version": null
+    },
+    "webview2": {
+      "status": "unavailable",
+      "version": null
+    }
+  },
+  "artifacts": {},
+  "tests": [
+    {
+      "scenario": "first-gui-crash-controller",
+      "outcome": "FAIL",
+      "reason": "controller240s_expired_before_connect"
+    }
+  ],
+  "result": "FAIL",
+  "failure_category": "scenario_failed",
+  "cleanup": {
+    "status": "PASS",
+    "checks": {
+      "owned_appdata_removed": true
+    }
+  },
+  "record_kind": "recovered_failure_not_new_run"
+}

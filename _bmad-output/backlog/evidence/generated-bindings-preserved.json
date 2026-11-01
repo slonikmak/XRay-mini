@@ -1,0 +1,13 @@
+{
+  "scope": "preexisting generated binding bytes after final Wails build",
+  "all_unchanged": true,
+  "files": {
+    "frontend/bindings/events/index.ts": true,
+    "frontend/bindings/github.com/slonikmak/XRay-mini/app.ts": true,
+    "frontend/bindings/github.com/slonikmak/XRay-mini/index.ts": true,
+    "frontend/bindings/github.com/slonikmak/XRay-mini/internal/core/index.ts": true,
+    "frontend/bindings/github.com/slonikmak/XRay-mini/internal/core/models.ts": true,
+    "frontend/bindings/github.com/wailsapp/wails/v3/internal/eventcreate.ts": true,
+    "frontend/bindings/github.com/wailsapp/wails/v3/internal/eventdata.d.ts": true
+  }
+}

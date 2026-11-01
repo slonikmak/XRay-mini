@@ -1,77 +1,37 @@
-# Xray Mini — backlog после сверки v0.2
+# Xray Mini — исполнение согласованного backlog
 
-**Дата:** 2026-11-01. **Состояние:** состав, критерии и риски согласованы; пользователь поручил автономное выполнение. Tickets имеют `refined: true`; фактическое исполнение и блокеры фиксируются в их plan/evidence. Источник — сверка snapshot `910c353`.
+Дата: 2026-11-01. Пользователь утвердил критерии/риски и поручил автономное выполнение. Исходная сверка относится к `910c353`; запуск исправлений — dirty checkout на `ee4832faa679f632b0bda850fe6c6f288dedcd24`. [Полный отчёт и свидетельства](backlog/evidence/autonomous-execution-2026-11-01.md).
 
-## Предлагаемый состав и порядок
+| ID | Работа | После | Фактический результат |
+|---|---|---|---|
+| 1 | Cleanup/reconnect | — | built; ownership сохранён, явная попытка retry через Connect |
+| 2 | Bounded callback shutdown | 1 | built; предел ожидания и безопасная ошибка |
+| 3 | Child termination spike | 2 | built; fake failure отделён от native rights test, Kill через Job |
+| 4 | Комплектность поставки | — | built; offline verifier и регрессии |
+| 5 | Provenance результатов | — | built; commit/dirty/build/hash/failure/cleanup |
+| 6 | Startup/log diagnostics spike | 3 | built; F3 подтверждён, F4 сохраняет текущую модель |
+| 7 | Windows 10 system | 4,5,6,11 | blocked; нет среды и вариантов учётной записи/WebView2 |
+| 8 | Windows 11 system | 4,5,6,11 | partial/blocked; native GUI/crash PASS, полная матрица открыта |
+| 9 | Windows 10 transport | 7 | blocked; нет Windows 10 и external peers/egress |
+| 10 | Windows 11 transport | 8,9 | partial/blocked; local real-core PASS не закрывает external acceptance |
+| 11 | Видимая ошибка startup | 6 | built; необходимое исправление, добавлено по результатам spike |
+| 12 | Native loopback fixture | 4,5,11 | built; повторяемые реальные три транспорта через оба proxy |
 
-| ID | Задача | Тип | После | Риск (предложение) |
-|---|---|---|---|---|
-| 1 | [Безопасный reconnect после cleanup error](backlog/bug-runtime-cleanup-blocks-reconnect.md) | bug, P2 | — | high |
-| 2 | [Close не зависит от возврата callback](backlog/bug-shutdown-blocked-by-callback.md) | bug, P2 | 1 | medium |
-| 3 | [Установить поведение при отказе остановки child](backlog/spike-child-termination-failure.md) | spike | 2 | high |
-| 4 | [Проверяемая комплектность поставки](backlog/story-package-completeness.md) | story | — | medium |
-| 5 | [Provenance новых результатов](backlog/story-run-evidence-provenance.md) | story | — | medium |
-| 6 | [Проверить startup/log diagnostics и принять решение](backlog/spike-startup-and-log-diagnostics.md) | spike, HITL | 3 | medium |
-| 7 | [Windows 10: системная приёмка](backlog/story-windows-10-system-acceptance.md) | story, HITL | 4, 5, 6 | high |
-| 8 | [Windows 11: системная приёмка](backlog/story-windows-11-system-acceptance.md) | story, HITL | 4, 5, 6 | high |
-| 9 | [Windows 10: transport/proxy приёмка](backlog/story-windows-10-transport-acceptance.md) | story, HITL | 7 | high |
-| 10 | [Windows 11: transport/proxy приёмка и итог](backlog/story-windows-11-transport-acceptance.md) | story, HITL | 8, 9 | high |
+`built` — статус BMAD после реализации, независимого ревью и проверки, board показывает review. Он не означает окончательную приёмку продукта владельцем. Точные причины блокировки находятся в plan-файлах и [platform evidence](backlog/evidence/autonomous-execution-2026-11-01.md). CLI `status backlog`/`next backlog` читает эти планы; новой доступной реализации в очереди нет.
 
-Начать предлагается с 1. Задачи 1→2→3 образуют одну полосу lifecycle-изменений;
-4 и 5 можно подготовить независимо. Задачи 7 и 8 используют раздельные среды и
-свидетельства; 9 передаёт повторяемый сетевой сценарий и общий test-server setup в 10,
-поэтому проверки одного server fixture выполняются последовательно.
+## Решения выполнения
 
-## Почему такой объём
-
-F1 и блокирующий callback из F2 оформлены как bugs с воспроизведением и критериями
-без предписанного исправления. Отказ Kill/Wait из F2 — отдельный spike: fake failure
-не доказывает отказ Windows API. F3/F4 также требуют установления достижимости и
-решения владельца продукта, а не автоматического расширения UI. F5 — проверка
-готовности всего комплекта; E1 — идентификация следующих фактических прогонов.
-
-Windows-разделение даёт четыре конечных прохода с разными доказательствами: native
-изоляция/GUI на каждой ОС и реальные transport/proxy на каждой ОС. Готовность сред,
-WebView2-вариантов, второй учётной записи и synthetic profiles — условие старта, не
-обещание их наличия. Если нужен setup, он оформляется отдельной задачей до приёмки.
-
-Это standalone backlog без новой инициативы или эпика; существующая спека остаётся
-источником требований. При необходимости пользователь может попросить объединить
-набор в инициативу; сейчас это не требуется для первой ограниченной задачи.
-
-## Проверка состава
-
-- Все F1–F5/E1 имеют владельца: F1→1; F2→2/3; F3/F4→6; F5→4; E1→5.
-- §8 покрывается 7–10: import/объяснение, duplicate child, cancel/late events/Wait,
-  crash/cleanup, WebView2/DPAPI/ACL, fixed ports, статусы после настоящего probe,
-  transport/no-bypass, сеть/recovery, окно/resync и bounded secret-free logs.
-- Spike 3/6 может выявить необходимое исправление: сначала добавить ticket и
-  зависимости затронутой приёмки, затем выполнять её. Закрытый spike не означает
-  реализованное исправление.
-- Воспроизведения defects в этом планировании не запускались. Исторический Linux
-  PASS не переименовывается в свежую или Windows-проверку.
-- Наличие PASS по отдельной задаче не закрывает MVP: итог требует всех обязательных
-  сценариев без скрытых SKIP/FAIL и устранённых блокирующих дефектов.
-
-Независимая проверка Ticket/Dependencies выполнена; исправлены неполные no-change
-критерии и явные пробелы native acceptance. CLI `status backlog` и `next backlog`
-используются для текущей готовности; первая задача требует одобрения критериев,
-а HITL-задачи дополнительно требуют подтверждённых ресурсов.
+- Авторизация: «Хорошо! Пройди по плану сам, автономно» заменяет прежние указания о дополнительных routine checkpoints. Локальные commits разрешены рабочим процессом; push не выполнялся.
+- 1–3 выполнены одной lifecycle-полосой: общий session ownership и единственный Wait нельзя разрывать несогласованными правками.
+- Spike 6 выявил необходимую задачу 11; она добавлена до system acceptance. В пределах делегированной автономии сохранена модель обновления diagnostic-only строк, без нового realtime SLA.
+- Setup трёх локальных transport peers вынесен в 12 и выполнен независимо от отсутствующей Windows 10. Требования полной приёмки 9/10 не ослаблены, зависимость итогового handoff сохранена.
+- Личная Windows не менялась: без удаления WebView2, новых аккаунтов, CA, системного proxy/routes и внешних серверов. Среды и разрешения для полной приёмки остаются явными blockers.
+- Linux JSON и исходное исследование сохранены как исторические свидетельства. Новые результаты не переписывают их выводы задним числом.
 
 ## Источники
 
-- [Сверка кода со спекой](research-runtime-lifecycle-and-interfaces/spec-v0.2-compliance.ru.md)
 - [Спецификация](../docs/xray-mini-spec-v0.2.ru.md)
-- [Windows checklist и предыдущие результаты](../docs/VERIFICATION.md)
-- [Навигация brownfield](../docs/BROWNFIELD.md)
-
-## Согласование и следующий шаг
-
-Подтверждение этого проекта утверждает состав/риски/критерии и даёт разрешение на
-локальный коммит файлов backlog. На repo store это предусмотренный шаг Sofia;
-начало реализации требует отдельного указания пользователя. Другие незакоммиченные
-файлы проекта в этот коммит не входят. После согласования первой предлагается задача 1.
-
-## Авторизация выполнения
-
-Decision: 2026-11-01 — «Хорошо! Пройди по плану сам, автономно» утверждает состав и автономную реализацию/проверку в доступных средах. Предыдущие указания о дополнительных подтверждениях заменены этой авторизацией. Недоступная среда фиксируется как blocker, без выдуманного PASS; не менять рабочие настройки личной Windows.
+- [Исходная сверка](research-runtime-lifecycle-and-interfaces/spec-v0.2-compliance.ru.md)
+- [Brownfield-навигация](../docs/BROWNFIELD.md)
+- [Verification](../docs/VERIFICATION.md)
+- [Отчёт выполнения](backlog/evidence/autonomous-execution-2026-11-01.md)

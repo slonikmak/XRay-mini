@@ -1,0 +1,10 @@
+{
+  "scope": "owned isolated GUI startup-error fixture",
+  "dacl_protected": true,
+  "current_user_allowed": true,
+  "system_allowed": true,
+  "unexpected_allow_rules": 0,
+  "observed_webview2_versions": [
+    "156.0.4314.58"
+  ]
+}

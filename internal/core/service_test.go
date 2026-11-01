@@ -15,13 +15,20 @@ import (
 const testConfig = `{"outbounds":[{"protocol":"vless","settings":{"vnext":[{"address":"example.invalid","port":443,"users":[{"id":"00000000-0000-0000-0000-000000000001"}]}]},"streamSettings":{"network":"raw","security":"reality","realitySettings":{"serverName":"example.invalid","publicKey":"test"}}}]}`
 
 type fakeChild struct {
-	done  chan error
-	once  sync.Once
-	waits atomic.Int32
+	done      chan error
+	once      sync.Once
+	waits     atomic.Int32
+	killError error
 }
 
 func (c *fakeChild) Wait() error { c.waits.Add(1); return <-c.done }
-func (c *fakeChild) Kill() error { c.once.Do(func() { c.done <- nil }); return nil }
+func (c *fakeChild) Kill() error {
+	if c.killError != nil {
+		return c.killError
+	}
+	c.once.Do(func() { c.done <- nil })
+	return nil
+}
 
 type fakeRunner struct {
 	preflight func(context.Context, string) error
@@ -385,4 +392,91 @@ func TestDiagnosticAllowlistAndBound(t *testing.T) {
 	if len(s.GetRecentLogs(3)) != 3 {
 		t.Fatal("limit not enforced")
 	}
+}
+
+func TestCloseBoundsBlockedNotificationAndWaitsForChild(t *testing.T) {
+	s, p, _, r := fixture(t)
+	entered := make(chan struct{})
+	release := make(chan struct{})
+	var releaseOnce, enteredOnce sync.Once
+	t.Cleanup(func() { releaseOnce.Do(func() { close(release) }) })
+	var callbacks atomic.Int32
+	s.SetEventCallback(func(Status) {
+		callbacks.Add(1)
+		enteredOnce.Do(func() { close(entered) })
+		<-release
+	})
+	if _, err := s.Connect(p.ID); err != nil {
+		t.Fatal(err)
+	}
+	<-entered
+	waitState(t, s, "running")
+	closed := make(chan error, 1)
+	go func() { closed <- s.Close() }()
+	select {
+	case err := <-closed:
+		if !errors.Is(err, errNotificationPending) || errors.Is(err, errStopPending) {
+			t.Fatalf("wanted notification-only failure, got %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("blocked callback held Close")
+	}
+	if r.child.waits.Load() != 1 || s.GetStatus().ProcessState != "stopped" {
+		t.Fatalf("Close did not confirm child cleanup: %+v", s.GetStatus())
+	}
+	assertNoRuntime(t, s)
+	// Releasing the existing invocation must not drain pending notifications.
+	releaseOnce.Do(func() { close(release) })
+	select {
+	case <-s.publisherDone:
+	case <-time.After(time.Second):
+		t.Fatal("publisher did not stop after callback returned")
+	}
+	if callbacks.Load() != 1 {
+		t.Fatalf("callback invoked %d times", callbacks.Load())
+	}
+	if err := s.Close(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestFailedKillRetainsWaitAndOwnershipUntilActualExit(t *testing.T) {
+	s, p, _, r := fixture(t)
+	r.child.killError = errors.New("private-process-detail")
+	// Always release the synthetic unreturned Wait before fixture Close, even
+	// when a fatal assertion aborts the test.
+	t.Cleanup(func() { r.child.once.Do(func() { r.child.done <- nil }) })
+	if _, err := s.Connect(p.ID); err != nil {
+		t.Fatal(err)
+	}
+	waitState(t, s, "running")
+	closed := make(chan error, 1)
+	go func() { closed <- s.Close() }()
+	select {
+	case err := <-closed:
+		if !errors.Is(err, errStopPending) {
+			t.Fatalf("wanted unconfirmed stop error, got %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("failed Kill was not reported promptly")
+	}
+	status := s.GetStatus()
+	if status.State != "Error" || status.ProcessState != "stopping" || strings.Contains(status.Message, "private") {
+		t.Fatalf("unsafe/false stopped status: %+v", status)
+	}
+	if _, err := s.Connect(p.ID); err == nil || r.starts.Load() != 1 {
+		t.Fatal("new child admitted before actual exit")
+	}
+	if replacement, err := NewService(s.store.dir); err == nil {
+		replacement.Close()
+		t.Fatal("store lock released while child was still owned")
+	}
+	if r.child.waits.Load() != 1 {
+		t.Fatal("Wait not owned exactly once")
+	}
+	r.child.once.Do(func() { r.child.done <- nil })
+	if err := s.Close(); err != nil {
+		t.Fatal(err)
+	}
+	assertNoRuntime(t, s)
 }

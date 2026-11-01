@@ -28,10 +28,25 @@ type LogEntry struct {
 	Level   string `json:"level"`
 	Message string `json:"message"`
 }
+
+const (
+	sessionShutdownTimeout      = 5 * time.Second
+	notificationShutdownTimeout = 250 * time.Millisecond
+)
+
+var (
+	errCleanupPending        = errors.New("temporary configuration cleanup failed; remove the block and retry Connect, Disconnect or Close")
+	errCleanupRetryRequested = errors.New("temporary configuration cleanup retry requested; connect again after cleanup finishes")
+	errStopPending           = errors.New("Xray stop is not confirmed; process and storage ownership are retained")
+	errNotificationPending   = errors.New("status notification delivery is incomplete; a callback is still running")
+)
+
 type session struct {
-	ctx           context.Context
-	cancel        context.CancelFunc
-	id, profileID string
+	ctx            context.Context
+	cancel         context.CancelFunc
+	id, profileID  string
+	retryCleanup   chan struct{}
+	cleanupBlocked bool // written only by Service.loop
 }
 type command struct {
 	kind, id string
@@ -47,23 +62,27 @@ type workerEvent struct {
 	at                       time.Time
 }
 type Service struct {
-	store          *profileStore
-	storeMu        sync.Mutex
-	commands       chan command
-	events         chan workerEvent
-	notifications  chan Status
-	loopDone       chan struct{}
-	publisherDone  chan struct{}
-	closeOnce      sync.Once
-	closed         atomic.Bool
-	snapshot       atomic.Value
-	logSnapshot    atomic.Value
-	callbackMu     sync.RWMutex
-	callback       func(Status)
-	runner         processRunner
-	probe          func(context.Context) bool
-	ports          func() error
-	healthInterval time.Duration
+	store             *profileStore
+	storeMu           sync.Mutex
+	commands          chan command
+	events            chan workerEvent
+	notifications     chan Status
+	loopDone          chan struct{}
+	publisherDone     chan struct{}
+	closeMu           sync.Mutex
+	publisherStopOnce sync.Once
+	publisherStop     chan struct{}
+	cleanupDone       chan struct{}
+	closeErrors       chan error
+	closed            atomic.Bool
+	snapshot          atomic.Value
+	logSnapshot       atomic.Value
+	callbackMu        sync.RWMutex
+	callback          func(Status)
+	runner            processRunner
+	probe             func(context.Context) bool
+	ports             func() error
+	healthInterval    time.Duration
 }
 
 func NewService(dataDir string) (*Service, error) {
@@ -71,11 +90,18 @@ func NewService(dataDir string) (*Service, error) {
 	if e != nil {
 		return nil, e
 	}
-	s := &Service{store: st, commands: make(chan command), events: make(chan workerEvent, 32), notifications: make(chan Status, 1), loopDone: make(chan struct{}), publisherDone: make(chan struct{}), runner: execRunner{}, probe: probeNetwork, ports: checkPorts, healthInterval: 30 * time.Second}
+	s := &Service{store: st, commands: make(chan command), events: make(chan workerEvent, 32), notifications: make(chan Status, 1), loopDone: make(chan struct{}), publisherDone: make(chan struct{}), publisherStop: make(chan struct{}), cleanupDone: make(chan struct{}), closeErrors: make(chan error, 1), runner: execRunner{}, probe: probeNetwork, ports: checkPorts, healthInterval: 30 * time.Second}
 	s.snapshot.Store(Status{State: "Disconnected", ProcessState: "stopped", NetworkHealth: "unknown", Message: "Local proxy is stopped", XrayVersion: XrayVersion})
 	s.logSnapshot.Store([]LogEntry{})
 	go s.publishLoop()
 	go s.loop()
+	go func() {
+		<-s.loopDone
+		s.storeMu.Lock()
+		_ = s.store.close()
+		s.storeMu.Unlock()
+		close(s.cleanupDone)
+	}()
 	return s, nil
 }
 func (s *Service) SetEventCallback(cb func(Status)) {
@@ -85,7 +111,24 @@ func (s *Service) SetEventCallback(cb func(Status)) {
 }
 func (s *Service) publishLoop() {
 	defer close(s.publisherDone)
-	for st := range s.notifications {
+	for {
+		// A callback cannot be forcibly canceled. Only this publisher invokes it,
+		// so at most one callback can outlive Close; no replacements are spawned.
+		select {
+		case <-s.publisherStop:
+			return
+		default:
+		}
+		var st Status
+		select {
+		case <-s.publisherStop:
+			return
+		case next, ok := <-s.notifications:
+			if !ok {
+				return
+			}
+			st = next
+		}
 		s.callbackMu.RLock()
 		cb := s.callback
 		s.callbackMu.RUnlock()
@@ -171,17 +214,40 @@ func (s *Service) Connect(id string) (Status, error) {
 	return r.status, r.err
 }
 func (s *Service) Disconnect() Status { return s.request("disconnect", "").status }
+
+// Close waits at most five seconds for session cleanup, then at most 250ms for
+// notification delivery. A session cleanup error retains ownership; another Close explicitly
+// retries failed file cleanup. A blocked callback can outlive Close until it returns.
 func (s *Service) Close() error {
-	s.closeOnce.Do(func() {
-		s.closed.Store(true)
-		s.request("close", "")
-		<-s.loopDone
-		s.storeMu.Lock()
-		s.store.close()
-		s.storeMu.Unlock()
-		<-s.publisherDone
-	})
-	return nil
+	s.closeMu.Lock()
+	defer s.closeMu.Unlock()
+	s.closed.Store(true)
+	select {
+	case <-s.closeErrors:
+	default:
+	}
+	s.request("close", "")
+	var result error
+	timer := time.NewTimer(sessionShutdownTimeout)
+	defer timer.Stop()
+	select {
+	case <-s.cleanupDone:
+	case result = <-s.closeErrors:
+	case <-timer.C:
+		result = errStopPending
+	}
+	if result != nil {
+		s.publisherStopOnce.Do(func() { close(s.publisherStop) })
+	}
+	notificationTimer := time.NewTimer(notificationShutdownTimeout)
+	defer notificationTimer.Stop()
+	select {
+	case <-s.publisherDone:
+	case <-notificationTimer.C:
+		s.publisherStopOnce.Do(func() { close(s.publisherStop) })
+		result = errors.Join(result, errNotificationPending)
+	}
+	return result
 }
 
 // This goroutine is the only writer of session state, revisions and diagnostics.
@@ -195,6 +261,20 @@ func (s *Service) loop() {
 	closing := false
 	failures := 0
 	deleting := map[string]bool{}
+	retryCleanup := func() {
+		if active.cleanupBlocked {
+			active.cleanupBlocked = false
+			active.retryCleanup <- struct{}{}
+		}
+	}
+	reportCloseError := func(err error) {
+		if closing {
+			select {
+			case s.closeErrors <- err:
+			default:
+			}
+		}
+	}
 	publish := func(state, process, health, message string) {
 		status.State = state
 		status.ProcessState = process
@@ -234,6 +314,10 @@ func (s *Service) loop() {
 			case "connect":
 				if closing || s.closed.Load() {
 					err = errors.New("service is closed")
+				} else if active != nil && active.cleanupBlocked {
+					retryCleanup()
+					err = errCleanupRetryRequested
+					publish("Error", "stopped", "unknown", err.Error())
 				} else if active != nil {
 					err = errors.New("a session is active or still cleaning up")
 				} else if !validID(c.id) {
@@ -246,7 +330,7 @@ func (s *Service) loop() {
 						err = errors.New("cannot create session ID")
 					} else {
 						ctx, cancel := context.WithCancel(context.Background())
-						active = &session{ctx, cancel, hex.EncodeToString(id[:]), c.id}
+						active = &session{ctx: ctx, cancel: cancel, id: hex.EncodeToString(id[:]), profileID: c.id, retryCleanup: make(chan struct{}, 1)}
 						status.ProfileID = c.id
 						status.SessionID = active.id
 						status.LastCheckedAt = ""
@@ -258,6 +342,7 @@ func (s *Service) loop() {
 			case "disconnect":
 				if active != nil {
 					active.cancel()
+					retryCleanup()
 					publish("Disconnecting", "stopping", "unknown", "Stopping local proxy")
 				}
 			case "reserve-delete":
@@ -276,6 +361,7 @@ func (s *Service) loop() {
 				closing = true
 				if active != nil {
 					active.cancel()
+					retryCleanup()
 					publish("Disconnecting", "stopping", "unknown", "Stopping local proxy")
 				}
 			}
@@ -285,6 +371,17 @@ func (s *Service) loop() {
 			}
 		case ev := <-s.events:
 			if active == nil || ev.sessionID != active.id {
+				continue
+			}
+			if ev.kind == "CleanupFailed" {
+				active.cleanupBlocked = true
+				publish("Error", "stopped", "unknown", errCleanupPending.Error())
+				reportCloseError(errCleanupPending)
+				continue
+			}
+			if ev.kind == "StopFailed" {
+				publish("Error", "stopping", "unknown", errStopPending.Error())
+				reportCloseError(errStopPending)
 				continue
 			}
 			if ev.kind == "StopCompleted" {
@@ -346,8 +443,10 @@ func (s *Service) run(run *session) {
 	defer func() {
 		run.cancel()
 		if tempDir != "" {
-			if e := os.RemoveAll(tempDir); e != nil {
-				failure = "Stopped, but temporary configuration cleanup failed"
+			for os.RemoveAll(tempDir) != nil {
+				s.event(run, "CleanupFailed", "", false)
+				// Exactly one attempt per explicit Disconnect/Close recovery request.
+				<-run.retryCleanup
 			}
 		}
 		s.event(run, "StopCompleted", failure, false)
@@ -456,7 +555,9 @@ func (s *Service) run(run *session) {
 	for {
 		select {
 		case <-run.ctx.Done():
-			_ = child.Kill()
+			if err := child.Kill(); err != nil {
+				s.event(run, "StopFailed", "", false)
+			}
 			<-exited
 			return
 		case <-exited:

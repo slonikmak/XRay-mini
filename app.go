@@ -22,13 +22,13 @@ func (a *App) ServiceStartup(ctx context.Context, options application.ServiceOpt
 	dir, err := os.UserConfigDir()
 	if err != nil {
 		a.startupError = errors.New("Cannot locate the user configuration directory")
-		return a.startupError
+		return nil // Keep the façade/window alive to display the safe failure.
 	}
 	a.service, err = core.NewService(filepath.Join(dir, "XrayMini"))
 	if err != nil {
 		// Core startup errors are fixed, sanitized categories (including instance ownership).
 		a.startupError = err
-		return a.startupError
+		return nil
 	}
 	a.service.SetEventCallback(func(status core.Status) {
 		if !a.closing.Load() {
@@ -85,7 +85,11 @@ func (a *App) Disconnect() core.Status {
 }
 func (a *App) GetStatus() core.Status {
 	if a.service == nil {
-		return core.Status{State: "Error", ProcessState: "error", NetworkHealth: "unknown", Message: "Desktop backend unavailable"}
+		message := "Desktop backend unavailable"
+		if a.startupError != nil {
+			message = a.startupError.Error()
+		}
+		return core.Status{State: "Error", ProcessState: "error", NetworkHealth: "unknown", Message: message, XrayVersion: core.XrayVersion}
 	}
 	return a.service.GetStatus()
 }
