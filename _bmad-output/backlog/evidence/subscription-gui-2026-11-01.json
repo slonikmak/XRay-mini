@@ -1,0 +1,58 @@
+{
+  "schema_version": 1,
+  "started_at_utc": "2026-11-01T15:20:16.462715+00:00",
+  "finished_at_utc": "2026-11-01T15:50:18.983705+00:00",
+  "command": [
+    "native_gui_subscription_import"
+  ],
+  "scope": "windows11-personal-subscription-gui",
+  "app": {
+    "status": "available",
+    "revision": "c0e412d67569c018b9c309cccdb559623f3a4d39",
+    "dirty": true
+  },
+  "environment": {
+    "system": "Windows",
+    "release": "11",
+    "version": "10.0.26300",
+    "machine": "AMD64"
+  },
+  "tools": {
+    "python": {
+      "status": "available",
+      "version": "3.12.10"
+    },
+    "go": {
+      "status": "available",
+      "version": "1.26.10"
+    },
+    "wails": {
+      "status": "available",
+      "version": "3.0.0"
+    },
+    "webview2": {
+      "status": "unavailable",
+      "version": null
+    }
+  },
+  "artifacts": {
+    "gui": {
+      "status": "available",
+      "sha256": "8dd510de3d9c6f451fdde08caf7623ac89b2ce45dc5b39af1563ea22fedc1ad7"
+    },
+    "runtime": {
+      "status": "available",
+      "sha256": "07a332b714a3c0eee047a22a9c0ea749b64df33e4e1ff6d28a8c7f9ef943ce10"
+    }
+  },
+  "tests": [],
+  "result": "FAIL",
+  "failure_category": "timeout",
+  "cleanup": {
+    "status": "PASS",
+    "checks": {
+      "owned_gui_exited": true,
+      "owned_appdata_removed": true
+    }
+  }
+}

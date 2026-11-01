@@ -14,11 +14,15 @@ export interface Status {
   message: string;
 }
 export interface ImportPreview { droppedSections: string[]; warning: string }
+export interface SubscriptionCandidate { id: string; name: string; transport: string }
 export interface LogEntry { time: string; level: string; message: string }
 export interface DesktopAPI {
   ListProfiles(): Promise<Profile[]>;
   ImportProfile(name: string, configJSON: string): Promise<Profile>;
   PreviewImport(configJSON: string): Promise<ImportPreview>;
+  PreviewSubscription(source: string): Promise<SubscriptionCandidate[]>;
+  ImportSubscriptionCandidate(id: string, name: string): Promise<Profile>;
+  ClearSubscriptionPreview(): Promise<void>;
   RenameProfile(id: string, name: string): Promise<Profile>;
   SubscribeStatus(callback: (status: Status) => void): () => void;
   DeleteProfile(id: string): Promise<void>;
@@ -35,6 +39,7 @@ const api: DesktopAPI = {
     return { ...preview, droppedSections: preview.droppedSections ?? [] };
   },
   ListProfiles: async () => (await AppService.ListProfiles()) ?? [],
+  PreviewSubscription: async source => (await AppService.PreviewSubscription(source)) ?? [],
   GetRecentLogs: async (limit) => (await AppService.GetRecentLogs(limit)) ?? [],
 };
 

@@ -14,6 +14,14 @@ import { Call as $Call, CancellablePromise as $CancellablePromise } from "@wails
 // @ts-ignore: Unused imports
 import * as core$0 from "./internal/core/models.js";
 
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
+import * as $models from "./models.js";
+
+export function ClearSubscriptionPreview(): $CancellablePromise<void> {
+    return $Call.ByID(3778373737);
+}
+
 export function Connect(id: string): $CancellablePromise<core$0.Status> {
     return $Call.ByID(164877153, id);
 }
@@ -38,12 +46,20 @@ export function ImportProfile(name: string, configJSON: string): $CancellablePro
     return $Call.ByID(1503704377, name, configJSON);
 }
 
+export function ImportSubscriptionCandidate(id: string, name: string): $CancellablePromise<core$0.Profile> {
+    return $Call.ByID(1222202506, id, name);
+}
+
 export function ListProfiles(): $CancellablePromise<core$0.Profile[] | null> {
     return $Call.ByID(1957526603);
 }
 
 export function PreviewImport(configJSON: string): $CancellablePromise<core$0.ImportPreview> {
     return $Call.ByID(624461070, configJSON);
+}
+
+export function PreviewSubscription(source: string): $CancellablePromise<$models.SubscriptionCandidate[] | null> {
+    return $Call.ByID(771832834, source);
 }
 
 export function RenameProfile(id: string, name: string): $CancellablePromise<core$0.Profile> {

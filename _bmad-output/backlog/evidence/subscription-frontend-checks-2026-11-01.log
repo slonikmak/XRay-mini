@@ -1,0 +1,42 @@
+
+> xray-mini-frontend@0.1.0 typecheck
+> tsc --noEmit
+
+
+> xray-mini-frontend@0.1.0 test
+> vitest run
+
+
+ RUN  v3.2.7 C:/Users/kp/Documents/projects/XRay-mini/frontend
+
+ ✓ src/bridge.test.ts (5 tests) 30ms
+stderr | src/App.test.tsx
+
+⚠️ Browser Environment Detected 
+
+Only UI previews are available in the browser. For full functionality, please run the application in desktop mode.
+More information at: https://v3.wails.io/learn/build/#using-a-browser-for-development
+
+
+ ✓ src/App.test.tsx (25 tests) 11912ms
+   ✓ desktop UI > loads metadata, requires a selection and imports only the chosen candidate  1130ms
+   ✓ desktop UI > offers a reachable stopped connection action and cancels loading without late results  847ms
+   ✓ desktop UI > offers a reachable running connection action and cancels loading without late results  1003ms
+   ✓ desktop UI > offers a reachable preparing connection action and cancels loading without late results  1006ms
+   ✓ desktop UI > awaits all serialized clears before starting a new subscription preview  758ms
+   ✓ desktop UI > invalidates candidates on source edits and clears the backend preview on unmount  706ms
+   ✓ desktop UI > shows the first failed probe honestly even before the two-failure degraded threshold  366ms
+   ✓ desktop UI > rejects a share URL locally without forwarding it or echoing it in an error  441ms
+   ✓ desktop UI > passes complete JSON unchanged, clears it after save, and never stores it in localStorage  696ms
+   ✓ desktop UI > clears secrets after cancel and prevents delete without confirmation  807ms
+   ✓ desktop UI > does not submit duplicate connect requests while one is pending  316ms
+   ✓ desktop UI > shows backend action failures and re-enables controls  438ms
+   ✓ desktop UI > requires explicit acknowledgment of discarded sections and invalidates preview when edited  950ms
+   ✓ desktop UI > renames a profile through the backend  373ms
+   ✓ desktop UI > allows cancellation after Connect acceptance while profile refresh is still blocked  339ms
+
+ Test Files  2 passed (2)
+      Tests  30 passed (30)
+   Start at  16:18:18
+   Duration  16.67s (transform 922ms, setup 0ms, collect 1.88s, tests 11.94s, environment 3.57s, prepare 1.11s)
+

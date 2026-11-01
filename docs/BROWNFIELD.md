@@ -43,3 +43,7 @@ lifecycle/startup, проверка поставки и provenance реализ�
 `--at` сравнивает цитируемый snapshot с HEAD и показывает изменившиеся файлы; она не
 проверяет незакоммиченные изменения и семантику нового поведения. После нового запуска
 добавить его свидетельства в Verification/transport records с точной областью действия.
+
+## Ручной импорт подписок
+
+[Build plan](../_bmad-output/plan-manual-subscription-import.md) и [реальная проверка](../_bmad-output/backlog/evidence/subscription-acceptance-2026-11-01.md) фиксируют ручной импорт HTTPS/plain/Base64/VLESS, выбор одного профиля и внешний XHTTP/TLS smoke. Автообновление подписок по-прежнему исключено.

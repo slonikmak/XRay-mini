@@ -1,0 +1,127 @@
+{
+  "schema_version": 1,
+  "started_at_utc": "2026-11-01T16:01:09.819058+00:00",
+  "finished_at_utc": "2026-11-01T16:01:11.483932+00:00",
+  "command": [
+    "post_subscription_acceptance_snapshot"
+  ],
+  "scope": "windows11-manual-subscription-acceptance",
+  "app": {
+    "status": "available",
+    "revision": "c0e412d67569c018b9c309cccdb559623f3a4d39",
+    "dirty": true
+  },
+  "environment": {
+    "system": "Windows",
+    "release": "11",
+    "version": "10.0.26300",
+    "machine": "AMD64"
+  },
+  "tools": {
+    "python": {
+      "status": "available",
+      "version": "3.12.10"
+    },
+    "go": {
+      "status": "available",
+      "version": "1.26.10"
+    },
+    "wails": {
+      "status": "available",
+      "version": "3.0.0"
+    },
+    "webview2": {
+      "status": "unavailable",
+      "version": null
+    }
+  },
+  "artifacts": {
+    "gui": {
+      "status": "available",
+      "sha256": "8dd510de3d9c6f451fdde08caf7623ac89b2ce45dc5b39af1563ea22fedc1ad7"
+    },
+    "runtime": {
+      "status": "available",
+      "sha256": "07a332b714a3c0eee047a22a9c0ea749b64df33e4e1ff6d28a8c7f9ef943ce10"
+    }
+  },
+  "tests": [
+    {
+      "scenario": "five-candidates-shown",
+      "outcome": "PASS"
+    },
+    {
+      "scenario": "one-profile-imported",
+      "outcome": "PASS"
+    },
+    {
+      "scenario": "production-probe-connected",
+      "outcome": "PASS"
+    },
+    {
+      "scenario": "http-and-socks-external-https",
+      "outcome": "PASS"
+    },
+    {
+      "scenario": "egress-differs-from-direct",
+      "outcome": "PASS"
+    },
+    {
+      "scenario": "disconnect-no-child-listener-runtime",
+      "outcome": "PASS"
+    },
+    {
+      "scenario": "reopened-import-empty",
+      "outcome": "PASS"
+    },
+    {
+      "scenario": "safe-visible-diagnostics",
+      "outcome": "PASS"
+    },
+    {
+      "scenario": "go-production-suite-and-vet",
+      "outcome": "PASS"
+    },
+    {
+      "scenario": "frontend-typecheck-30-tests",
+      "outcome": "PASS"
+    },
+    {
+      "scenario": "production-build-and-package-verifier",
+      "outcome": "PASS"
+    }
+  ],
+  "result": "PASS",
+  "failure_category": null,
+  "cleanup": {
+    "status": "PASS",
+    "checks": {
+      "owned_gui_exited": true,
+      "owned_appdata_removed": true,
+      "proxy_listeners_released": true,
+      "owned_runtime_removed": true
+    }
+  },
+  "record_kind": "post_execution_snapshot_not_a_new_runtime_run",
+  "source_sha256": {
+    "app.go": "fc9750e8ecdb4023c9985e7fc68592b1518c04da3ffa08cc9a4730119da0eac7",
+    "app_test.go": "f2696f026136ed1bcd64624a537d5b05e88bbd0df8cb05dbd5801a8e7dba1550",
+    "internal/core/subscription.go": "be9ad776a9b3cc0393d2b86f4ef0a39c612056a10633534ecc25f5d9712e514f",
+    "internal/core/subscription_test.go": "20c29e0427cfdcff2e4163e29e9baa0d65cd9c9d2a7ae95dd2deef659e094861",
+    "frontend/src/App.tsx": "63729907a3f06eff7af9bdacdb539e29d6436d40eaae0cb14ee8e20ba5fec8a8",
+    "frontend/src/App.test.tsx": "cb33a51a0b32f0d706d7e30b4f0dac1b56d6bcd627d7816a1b6b87a5b56a0b09",
+    "frontend/src/bridge.ts": "e0e65fa6c816917e0003427849221ed6c7d99e40fc91b2d202cde9f43ce9a482",
+    "frontend/src/bridge.test.ts": "e804ac6e94384dfbd633d2ea838d5867bbfa32902818dc286aaadcdd4bc18e16",
+    "frontend/src/style.css": "c139fc238d54af208fed35fa04f899f9aa887cbc694eff05498a5b5e5d6e402e",
+    "frontend/bindings/github.com/slonikmak/XRay-mini/app.ts": "98d0d4abff0aa67aae9fc2eb2d556d1832564cd1e39ce8ed725cca9fdb62632d",
+    "frontend/bindings/github.com/slonikmak/XRay-mini/index.ts": "520bcc12a0094e25a7e2ac180bfb211e369b11302fcdb121890b8d05c3d7862e",
+    "frontend/bindings/github.com/slonikmak/XRay-mini/models.ts": "4f7ff641b0ddcad5ec566470c77bbf4f4ac49ed98dfee582e4b91445c5be96d8"
+  },
+  "preexisting_unrelated_generated_binding_bytes_unchanged": {
+    "frontend/bindings/events/index.ts": true,
+    "frontend/bindings/github.com/slonikmak/XRay-mini/internal/core/index.ts": true,
+    "frontend/bindings/github.com/slonikmak/XRay-mini/internal/core/models.ts": true,
+    "frontend/bindings/github.com/wailsapp/wails/v3/internal/eventcreate.ts": true,
+    "frontend/bindings/github.com/wailsapp/wails/v3/internal/eventdata.d.ts": true
+  }
+}

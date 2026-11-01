@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import App from './App';
 import { desktop, initialStatus, type DesktopAPI } from './bridge';
 vi.mock('./bridge', async (importOriginal) => ({ ...await importOriginal<typeof import('./bridge')>(), desktop: vi.fn() }));
@@ -11,6 +11,8 @@ beforeEach(() => {
   HTMLDialogElement.prototype.showModal = function () { this.setAttribute('open', ''); };
   HTMLDialogElement.prototype.close = function () { this.removeAttribute('open'); };
   api = {
+    PreviewSubscription: vi.fn().mockResolvedValue([{ id: 'opaque-1', name: 'Candidate one', transport: 'XHTTP/TLS' }, { id: 'opaque-2', name: 'Candidate two', transport: 'XHTTP/TLS' }]),
+    ImportSubscriptionCandidate: vi.fn().mockResolvedValue(profile), ClearSubscriptionPreview: vi.fn().mockResolvedValue(undefined),
     PreviewImport: vi.fn().mockResolvedValue({ droppedSections: [], warning: '' }),
     RenameProfile: vi.fn().mockResolvedValue(profile), SubscribeStatus: vi.fn().mockReturnValue(vi.fn()),
     ListProfiles: vi.fn().mockResolvedValue([profile]), ImportProfile: vi.fn().mockResolvedValue(profile),
@@ -21,6 +23,79 @@ beforeEach(() => {
 });
 afterEach(() => { cleanup(); vi.mocked(desktop).mockReturnValue(undefined); vi.restoreAllMocks(); });
 describe('desktop UI', () => {
+  it('loads metadata, requires a selection and imports only the chosen candidate', async () => {
+    render(<App/>); await screen.findByRole('button', { name: /My profile Xray configuration/ });
+    fireEvent.click(screen.getByRole('button', { name: 'Import profile' }));
+    fireEvent.change(screen.getByLabelText('Import from'), { target: { value: 'link' } });
+    const source = screen.getByLabelText('Subscription URL or VLESS link') as HTMLInputElement;
+    expect(source.type).toBe('password');
+    fireEvent.change(source, { target: { value: 'https://example.invalid/private-token' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Load profiles' }));
+    await screen.findByLabelText('Choose a profile');
+    expect(api.ImportSubscriptionCandidate).not.toHaveBeenCalled();
+    expect(api.Connect).not.toHaveBeenCalled();
+    fireEvent.change(screen.getByLabelText('Choose a profile'), { target: { value: 'opaque-2' } });
+    fireEvent.submit(screen.getByLabelText('Profile name').closest('form')!);
+    await waitFor(() => expect(api.ImportSubscriptionCandidate).toHaveBeenCalledWith('opaque-2', 'Candidate two'));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    fireEvent.click(screen.getByRole('button', { name: 'Import profile' }));
+    expect((screen.getByLabelText('Subscription URL or VLESS link') as HTMLInputElement).value).toBe('');
+    expect(localStorage.length).toBe(0);
+  });
+  it.each(['stopped', 'running', 'preparing'])('offers a reachable %s connection action and cancels loading without late results', async processState => {
+    let finish!: (value: Awaited<ReturnType<DesktopAPI['PreviewSubscription']>>) => void;
+    vi.mocked(api.PreviewSubscription).mockReturnValue(new Promise(resolve => { finish = resolve; }));
+    vi.mocked(api.GetStatus).mockResolvedValue({ ...initialStatus, processState, profileId: processState === 'stopped' ? '' : profile.id });
+    render(<App/>); await screen.findByRole('button', { name: /My profile (Xray configuration|Active profile)/ });
+    fireEvent.click(screen.getByRole('button', { name: 'Import profile' }));
+    fireEvent.change(screen.getByLabelText('Import from'), { target: { value: 'link' } });
+    fireEvent.change(screen.getByLabelText('Subscription URL or VLESS link'), { target: { value: 'vless://synthetic-secret' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Load profiles' }));
+    await waitFor(() => expect(api.PreviewSubscription).toHaveBeenCalledOnce());
+    const dialog = within(screen.getByRole('dialog'));
+    const connectionAction = dialog.getByRole('button', { name: /during loading/ }) as HTMLButtonElement;
+    expect(connectionAction.disabled).toBe(false);
+    fireEvent.click(connectionAction);
+    await waitFor(() => processState === 'stopped' ? expect(api.Connect).toHaveBeenCalledWith(profile.id) : expect(api.Disconnect).toHaveBeenCalledOnce());
+    await waitFor(() => expect((dialog.getByRole('button', { name: 'Cancel' }) as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel loading' }));
+    await act(async () => finish([{ id: 'late', name: 'Late candidate', transport: 'XHTTP/TLS' }]));
+    expect(screen.queryByLabelText('Choose a profile')).toBeNull();
+    expect(api.ClearSubscriptionPreview).toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+  it('awaits all serialized clears before starting a new subscription preview', async () => {
+    const finishClears: (() => void)[] = [];
+    vi.mocked(api.ClearSubscriptionPreview).mockImplementation(() => new Promise(resolve => { finishClears.push(resolve); }));
+    render(<App/>); await screen.findByRole('button', { name: /My profile Xray configuration/ });
+    fireEvent.click(screen.getByRole('button', { name: 'Import profile' }));
+    fireEvent.change(screen.getByLabelText('Import from'), { target: { value: 'link' } });
+    fireEvent.change(screen.getByLabelText('Subscription URL or VLESS link'), { target: { value: 'https://example.invalid/synthetic' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Load profiles' }));
+    for (let count = 1; count <= 3; count++) {
+      await waitFor(() => expect(api.ClearSubscriptionPreview).toHaveBeenCalledTimes(count));
+      expect(api.PreviewSubscription).not.toHaveBeenCalled();
+      await act(async () => finishClears[count - 1]());
+    }
+    await screen.findByLabelText('Choose a profile');
+    expect(api.PreviewSubscription).toHaveBeenCalledOnce();
+  });
+  it('invalidates candidates on source edits and clears the backend preview on unmount', async () => {
+    const view = render(<App/>); await screen.findByRole('button', { name: /My profile Xray configuration/ });
+    fireEvent.click(screen.getByRole('button', { name: 'Import profile' }));
+    fireEvent.change(screen.getByLabelText('Import from'), { target: { value: 'link' } });
+    fireEvent.change(screen.getByLabelText('Subscription URL or VLESS link'), { target: { value: 'https://example.invalid/a' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Load profiles' }));
+    await screen.findByLabelText('Choose a profile');
+    const beforeEdit = vi.mocked(api.ClearSubscriptionPreview).mock.calls.length;
+    fireEvent.change(screen.getByLabelText('Subscription URL or VLESS link'), { target: { value: 'https://example.invalid/b' } });
+    expect(screen.queryByLabelText('Choose a profile')).toBeNull();
+    await waitFor(() => expect(api.ClearSubscriptionPreview).toHaveBeenCalledTimes(beforeEdit + 1));
+    const calls = vi.mocked(api.ClearSubscriptionPreview).mock.calls.length;
+    view.unmount();
+    await waitFor(() => expect(api.ClearSubscriptionPreview).toHaveBeenCalledTimes(calls + 1));
+  });
   it('shows safe startup status even when profiles fail to refresh', async () => {
     const message = 'another Xray Mini instance owns this profile directory';
     vi.mocked(api.ListProfiles).mockRejectedValue(new Error('profile read failed'));

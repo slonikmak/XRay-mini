@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
-import { desktop, initialStatus, type ImportPreview, type LogEntry, type Profile, type Status } from './bridge';
+import { desktop, initialStatus, type ImportPreview, type LogEntry, type Profile, type Status, type SubscriptionCandidate } from './bridge';
 
 type IconName = 'power' | 'plus' | 'copy' | 'shield' | 'arrow' | 'trash' | 'close';
 function Icon({ name }: { name: IconName }) {
@@ -37,6 +37,13 @@ export default function App() {
   const [config, setConfig] = useState('');
   const [preview, setPreview] = useState<ImportPreview | null>(null);
   const [acknowledged, setAcknowledged] = useState(false);
+  const [importKind, setImportKind] = useState<'json' | 'link'>('json');
+  const [source, setSource] = useState('');
+  const [candidates, setCandidates] = useState<SubscriptionCandidate[]>([]);
+  const [candidateId, setCandidateId] = useState('');
+  const [loadingSubscription, setLoadingSubscription] = useState(false);
+  const subscriptionGeneration = useRef(0);
+  const clearingSubscription = useRef<Promise<void>>(Promise.resolve());
   const alive = useRef(false);
   const lock = useRef(false);
   const revision = useRef(0);
@@ -77,7 +84,7 @@ export default function App() {
     const recover = () => { void refresh(true); };
     window.addEventListener('focus', recover);
     document.addEventListener('visibilitychange', recover);
-    return () => { alive.current = false; revision.current++; pollBusy.current = false; unsubscribe?.(); window.removeEventListener('focus', recover); document.removeEventListener('visibilitychange', recover); };
+    return () => { alive.current = false; revision.current++; subscriptionGeneration.current++; const api = desktop(); clearingSubscription.current = clearingSubscription.current.then(() => api?.ClearSubscriptionPreview()).catch(() => {}); pollBusy.current = false; unsubscribe?.(); window.removeEventListener('focus', recover); document.removeEventListener('visibilitychange', recover); };
   }, [refresh]);
 
   async function perform(label: string, action: () => Promise<void>) {
@@ -92,12 +99,40 @@ export default function App() {
       if (alive.current) { setBusy(''); void refresh(true); }
     }
   }
-  function closeModal() { if (lock.current) return; setModal(null); setConfig(''); setName(''); setPreview(null); setAcknowledged(false); setError(''); }
+  function clearSubscription() {
+    subscriptionGeneration.current++; setCandidates([]); setCandidateId(''); setLoadingSubscription(false);
+    const api = desktop();
+    clearingSubscription.current = clearingSubscription.current.then(() => api?.ClearSubscriptionPreview()).catch(() => {});
+  }
+  function closeModal() { if (lock.current) return; clearSubscription(); setModal(null); setSource(''); setConfig(''); setName(''); setPreview(null); setAcknowledged(false); setError(''); }
+  async function loadSubscription() {
+    const api = desktop(); if (!api || !source.trim()) return;
+    clearSubscription();
+    const generation = subscriptionGeneration.current;
+    setLoadingSubscription(true); setError('');
+    try {
+      await clearingSubscription.current;
+      if (generation !== subscriptionGeneration.current || !alive.current) return;
+      const result = await api.PreviewSubscription(source.trim());
+      if (generation !== subscriptionGeneration.current || !alive.current) return;
+      setCandidates(result); setCandidateId(''); setName('');
+    } catch { if (generation === subscriptionGeneration.current && alive.current) setError('Unable to load profiles. Check the HTTPS source, network, and supported VLESS parameters.'); }
+    finally { if (generation === subscriptionGeneration.current && alive.current) setLoadingSubscription(false); }
+  }
   async function importProfile(event: FormEvent) {
     event.preventDefault();
-    try { const parsed: unknown = JSON.parse(config); if (!parsed || Array.isArray(parsed) || typeof parsed !== 'object') throw new Error(); }
-    catch { setError('Enter a complete, valid Xray JSON object. Share links are not supported in this version.'); return; }
     const api = desktop(); if (!api) return;
+    if (importKind === 'link') {
+      if (!candidateId || !name.trim() || loadingSubscription) return;
+      await perform('Importing', async () => {
+        const profile = await api.ImportSubscriptionCandidate(candidateId, name.trim());
+        if (!alive.current) return;
+        clearSubscription(); setSource(''); setName(''); setConfig(''); setModal(null); setSelectedId(profile.id); setNotice('Profile imported. Select Connect when ready.');
+      });
+      return;
+    }
+    try { const parsed: unknown = JSON.parse(config); if (!parsed || Array.isArray(parsed) || typeof parsed !== 'object') throw new Error(); }
+    catch { setError('Enter a complete, valid Xray JSON object, or choose Subscription or VLESS link.'); return; }
     await perform('Importing', async () => {
       if (!preview) {
         const next = await api.PreviewImport(config);
@@ -170,13 +205,20 @@ export default function App() {
     </main>
 
     {modal === 'import' && <Modal title="Import a profile" onClose={closeModal} busy={!!busy}><form onSubmit={event => { void importProfile(event); }}>
-      <p className="modal-description">Paste a complete Xray JSON configuration. Reality and xHTTP settings are preserved; local proxy inbounds are managed by the app.</p>
+      <label htmlFor="import-kind">Import from</label><select id="import-kind" value={importKind} disabled={!!busy} onChange={e => { clearSubscription(); setSource(''); setConfig(''); setName(''); setPreview(null); setAcknowledged(false); setError(''); setImportKind(e.target.value as 'json' | 'link'); }}><option value="json">Xray JSON</option><option value="link">Subscription or VLESS link</option></select>
+      {importKind === 'json' ? <><p className="modal-description">Paste a complete Xray JSON configuration. Reality and xHTTP settings are preserved; local proxy inbounds are managed by the app.</p>
       <label htmlFor="profile-name">Profile name</label><input id="profile-name" autoFocus value={name} onChange={e => setName(e.target.value)} maxLength={80} required disabled={!!busy} placeholder="My connection" autoComplete="off"/>
       <label htmlFor="profile-json">Xray configuration</label><textarea id="profile-json" value={config} onChange={e => { setConfig(e.target.value); setPreview(null); setAcknowledged(false); }} required disabled={!!busy} placeholder={'{\n  "outbounds": [...]\n}'} spellCheck={false} autoComplete="off" autoCapitalize="off"/>
       {preview && preview.droppedSections.length > 0 && <div className="alert notice" role="status"><strong>Only the selected VLESS outbound will be imported.</strong><p>{preview.warning}</p><p>Discarded sections: {preview.droppedSections.join(', ')}</p><label><input type="checkbox" checked={acknowledged} onChange={e => setAcknowledged(e.target.checked)} disabled={!!busy}/>I understand these sections will not be used.</label></div>}
-      <p className="privacy-note"><Icon name="shield"/>Contains credentials. Stored locally, never sent to a cloud service. The pasted text is cleared when saved or canceled.</p>
+      </> : <><p className="modal-description">Load an HTTPS subscription or one VLESS link, then choose one profile to save. Loading does not connect. The preview expires after five minutes.</p>
+      <label htmlFor="subscription-source">Subscription URL or VLESS link</label><input id="subscription-source" type="password" autoFocus value={source} onChange={e => { clearSubscription(); setSource(e.target.value); setName(''); setError(''); }} maxLength={65536} disabled={!!busy} autoComplete="off" spellCheck={false} autoCapitalize="off"/>
+      <div className="subscription-actions"><button type="button" className="secondary" disabled={!!busy || !source.trim()} onClick={() => { void loadSubscription(); }}>{loadingSubscription ? 'Reload profiles' : 'Load profiles'}</button>{loadingSubscription && <button type="button" className="secondary" onClick={clearSubscription}>Cancel loading</button>}</div>
+      {loadingSubscription && <><p role="status">Loading profiles…</p><button type="button" className="secondary" aria-label={status.processState === 'preparing' ? 'Cancel connection startup during loading' : active ? 'Disconnect active profile during loading' : 'Connect selected profile during loading'} disabled={!available || !!busy || status.processState === 'stopping' || (!active && (!selected || !!syncError))} onClick={() => { void toggleConnection(); }}>{status.processState === 'stopping' ? 'Stopping…' : status.processState === 'preparing' ? 'Cancel startup' : active ? 'Disconnect' : 'Connect'}</button></>}
+      {candidates.length > 0 && <><label htmlFor="subscription-candidate">Choose a profile</label><select id="subscription-candidate" value={candidateId} disabled={!!busy} onChange={e => { setCandidateId(e.target.value); setName(candidates.find(candidate => candidate.id === e.target.value)?.name || ''); }}><option value="">Select one of {candidates.length} profiles</option>{candidates.map(candidate => <option key={candidate.id} value={candidate.id}>{candidate.name} · {candidate.transport}</option>)}</select><label htmlFor="profile-name">Profile name</label><input id="profile-name" value={name} onChange={e => setName(e.target.value)} maxLength={80} required disabled={!!busy} autoComplete="off"/></>}
+      </>}
+      <p className="privacy-note"><Icon name="shield"/>Contains credentials. HTTPS sources are requested only when you load. Only the chosen profile is stored locally; pasted text is cleared on save or cancel.</p>
       {error && <div className="alert error" role="alert">{error}</div>}
-      <div className="modal-actions"><button type="button" className="secondary" onClick={closeModal} disabled={!!busy}>Cancel</button><button className="primary" type="submit" disabled={!!busy || !name.trim() || !config.trim() || (!!preview?.droppedSections.length && !acknowledged)}>{busy ? 'Checking…' : preview?.droppedSections.length ? 'Confirm import' : 'Import profile'}</button></div>
+      <div className="modal-actions"><button type="button" className="secondary" onClick={closeModal} disabled={!!busy}>Cancel</button><button className="primary" type="submit" disabled={!!busy || !name.trim() || (importKind === 'link' ? !candidateId || loadingSubscription : !config.trim() || (!!preview?.droppedSections.length && !acknowledged))}>{busy ? 'Checking…' : importKind === 'json' && preview?.droppedSections.length ? 'Confirm import' : 'Import profile'}</button></div>
     </form></Modal>}
     {modal === 'rename' && selected && <Modal title="Rename profile" onClose={closeModal} busy={!!busy}><form onSubmit={e => { e.preventDefault(); const api = desktop(); if (api) void perform('Renaming', async () => { await api.RenameProfile(selected.id, name.trim()); if (alive.current) { setModal(null); setName(''); setNotice('Profile renamed.'); } }); }}><label htmlFor="rename-name">Profile name</label><input id="rename-name" autoFocus value={name} onChange={e => setName(e.target.value)} maxLength={80} disabled={!!busy} required/>{error && <div className="alert error" role="alert">{error}</div>}<div className="modal-actions"><button type="button" className="secondary" onClick={closeModal} disabled={!!busy}>Cancel</button><button className="primary" disabled={!!busy || !name.trim()}>Save name</button></div></form></Modal>}
     {modal === 'delete' && selected && <Modal title="Delete this profile?" onClose={closeModal} busy={!!busy}><p className="modal-description">Remove <strong>{selected.name}</strong> and its saved configuration from this computer? This cannot be undone.</p>{error && <div className="alert error" role="alert">{error}</div>}<div className="modal-actions"><button className="secondary" onClick={closeModal} disabled={!!busy} autoFocus>Keep profile</button><button className="danger" disabled={!!busy} onClick={() => { const api = desktop(); if (api) void perform('Deleting', async () => { await api.DeleteProfile(selected.id); if (alive.current) { setModal(null); setNotice('Profile deleted.'); } }); }}>{busy ? 'Deleting…' : 'Delete profile'}</button></div></Modal>}

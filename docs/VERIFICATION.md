@@ -1,5 +1,7 @@
 # Verification — native Windows update, 2026-11-01
 
+Manual subscription import has a [separate real Windows GUI/external proxy report](../_bmad-output/backlog/evidence/subscription-acceptance-2026-11-01.md): five candidates loaded, one XHTTP/TLS endpoint passed HTTP/SOCKS HTTPS/egress and clean Disconnect. Other external transports and remaining system checks are still open.
+
 Windows 11 Home amd64 10.0.26300.9711, normal user. Go 1.26.10, Wails 3.0.0; actual owned WebView2 child 156.0.4314.58. The dirty source HEAD, exact artifact/source hashes and scenario outcomes are preserved in the [execution report](../_bmad-output/backlog/evidence/autonomous-execution-2026-11-01.md), not attributed to the old clean baseline.
 
 PASS: native production Go suite and vet, frontend typecheck/23 tests, Python packaging/provenance 25 tests, production Wails build and offline complete-package check. Native real-core loopback passed all three transports through both proxies, stopped-peer no-bypass, wrong TLS leaf pin, duplicate Connect, health recovery and cleanup. Packaged GUI startup error, import, unhealthy running status, forced parent exit, persisted profile/relaunch and orphan cleanup were inspected on this host. [Windows system detail](../_bmad-output/backlog/evidence/windows-11-system.md) and [transport detail](../_bmad-output/backlog/evidence/native-windows-loopback-2026-11-01.md) distinguish their scope.

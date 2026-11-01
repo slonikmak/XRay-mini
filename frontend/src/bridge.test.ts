@@ -9,6 +9,16 @@ vi.mock('@wailsio/runtime', () => ({
 }));
 beforeEach(() => { vi.resetAllMocks(); });
 describe('Wails v3 service bridge', () => {
+  it('loads metadata and imports an opaque subscription candidate through generated bindings', async () => {
+    vi.mocked(System.IsWindows).mockReturnValue(true);
+    vi.mocked(Call.ByID).mockResolvedValue(null);
+    await expect(desktop()!.PreviewSubscription('https://example.invalid/synthetic')).resolves.toEqual([]);
+    expect(Call.ByID).toHaveBeenLastCalledWith(771832834, 'https://example.invalid/synthetic');
+    await desktop()!.ImportSubscriptionCandidate('opaque-id', 'Chosen');
+    expect(Call.ByID).toHaveBeenLastCalledWith(1222202506, 'opaque-id', 'Chosen');
+    await desktop()!.ClearSubscriptionPreview();
+    expect(Call.ByID).toHaveBeenLastCalledWith(3778373737);
+  });
   it('does not mistake an imported runtime for a native host', () => {
     expect(desktop()).toBeUndefined();
     expect(Call.ByID).not.toHaveBeenCalled();

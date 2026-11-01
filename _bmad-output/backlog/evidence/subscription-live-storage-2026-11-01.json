@@ -1,0 +1,7 @@
+{
+  "scope": "owned isolated subscription client",
+  "profile_count": 1,
+  "runtime_count": 1,
+  "credential_comparison_available": true,
+  "profile_credentials_absent_from_ciphertext": true
+}

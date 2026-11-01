@@ -1,0 +1,167 @@
+=== RUN   TestSubscriptionFacadeMetadataExplicitImportAndExpiry
+--- PASS: TestSubscriptionFacadeMetadataExplicitImportAndExpiry (0.04s)
+=== RUN   TestSubscriptionFacadeRejectsLateCanceledAndShutdownResults
+=== RUN   TestSubscriptionFacadeRejectsLateCanceledAndShutdownResults/cancel
+=== RUN   TestSubscriptionFacadeRejectsLateCanceledAndShutdownResults/replace
+=== RUN   TestSubscriptionFacadeRejectsLateCanceledAndShutdownResults/shutdown
+--- PASS: TestSubscriptionFacadeRejectsLateCanceledAndShutdownResults (0.02s)
+    --- PASS: TestSubscriptionFacadeRejectsLateCanceledAndShutdownResults/cancel (0.01s)
+    --- PASS: TestSubscriptionFacadeRejectsLateCanceledAndShutdownResults/replace (0.01s)
+    --- PASS: TestSubscriptionFacadeRejectsLateCanceledAndShutdownResults/shutdown (0.01s)
+=== RUN   TestSubscriptionFacadeDelayedSaveDoesNotBlockPreviewOrShutdown
+=== RUN   TestSubscriptionFacadeDelayedSaveDoesNotBlockPreviewOrShutdown/clear
+=== RUN   TestSubscriptionFacadeDelayedSaveDoesNotBlockPreviewOrShutdown/replace
+=== RUN   TestSubscriptionFacadeDelayedSaveDoesNotBlockPreviewOrShutdown/shutdown
+=== RUN   TestSubscriptionFacadeDelayedSaveDoesNotBlockPreviewOrShutdown/save_failure
+--- PASS: TestSubscriptionFacadeDelayedSaveDoesNotBlockPreviewOrShutdown (0.03s)
+    --- PASS: TestSubscriptionFacadeDelayedSaveDoesNotBlockPreviewOrShutdown/clear (0.01s)
+    --- PASS: TestSubscriptionFacadeDelayedSaveDoesNotBlockPreviewOrShutdown/replace (0.01s)
+    --- PASS: TestSubscriptionFacadeDelayedSaveDoesNotBlockPreviewOrShutdown/shutdown (0.01s)
+    --- PASS: TestSubscriptionFacadeDelayedSaveDoesNotBlockPreviewOrShutdown/save_failure (0.01s)
+=== RUN   TestStartupFailureKeepsSafeStatusAndRejectsOperations
+--- PASS: TestStartupFailureKeepsSafeStatusAndRejectsOperations (0.02s)
+PASS
+ok  	github.com/slonikmak/XRay-mini	4.717s
+?   	github.com/slonikmak/XRay-mini/integration/prepareconfig	[no test files]
+?   	github.com/slonikmak/XRay-mini/integration/tlstarget	[no test files]
+=== RUN   TestPreparePreservesRequiredTransportCombinations
+=== RUN   TestPreparePreservesRequiredTransportCombinations/raw-reality
+=== RUN   TestPreparePreservesRequiredTransportCombinations/xhttp-reality
+=== RUN   TestPreparePreservesRequiredTransportCombinations/xhttp-tls
+--- PASS: TestPreparePreservesRequiredTransportCombinations (0.00s)
+    --- PASS: TestPreparePreservesRequiredTransportCombinations/raw-reality (0.00s)
+    --- PASS: TestPreparePreservesRequiredTransportCombinations/xhttp-reality (0.00s)
+    --- PASS: TestPreparePreservesRequiredTransportCombinations/xhttp-tls (0.00s)
+=== RUN   TestPrepareForcesOnlyVLESSRoute
+--- PASS: TestPrepareForcesOnlyVLESSRoute (0.00s)
+=== RUN   TestRejectInvalidOrAmbiguousConfiguration
+--- PASS: TestRejectInvalidOrAmbiguousConfiguration (0.00s)
+=== RUN   TestRejectUnsafeSelectedDependencies
+--- PASS: TestRejectUnsafeSelectedDependencies (0.00s)
+=== RUN   TestRawAndTCPAliasesNotRewritten
+--- PASS: TestRawAndTCPAliasesNotRewritten (0.00s)
+=== RUN   TestImportPreviewDoesNotEchoSecrets
+--- PASS: TestImportPreviewDoesNotEchoSecrets (0.00s)
+=== RUN   TestInputSizeAndDepthLimit
+--- PASS: TestInputSizeAndDepthLimit (0.00s)
+=== RUN   TestNativeWindowsLoopback
+    native_transport_windows_test.go:42: set XRAY_MINI_NATIVE_LOOPBACK=1 for owned native loopback fixtures
+--- SKIP: TestNativeWindowsLoopback (0.00s)
+=== RUN   TestExecRunnerWithHelperProcess
+--- PASS: TestExecRunnerWithHelperProcess (0.16s)
+=== RUN   TestOutputDrainNeverRetainsChildText
+--- PASS: TestOutputDrainNeverRetainsChildText (0.02s)
+=== RUN   TestContainedStartRejectsCanceledContext
+--- PASS: TestContainedStartRejectsCanceledContext (0.00s)
+=== RUN   TestWindowsJobKillsChildOnParentExit
+=== RUN   TestWindowsJobKillsChildOnParentExit/preflight
+=== RUN   TestWindowsJobKillsChildOnParentExit/runtime
+--- PASS: TestWindowsJobKillsChildOnParentExit (0.32s)
+    --- PASS: TestWindowsJobKillsChildOnParentExit/preflight (0.16s)
+    --- PASS: TestWindowsJobKillsChildOnParentExit/runtime (0.16s)
+=== RUN   TestWindowsJobCrashParentHelper
+    process_windows_test.go:61: subprocess helper
+--- SKIP: TestWindowsJobCrashParentHelper (0.00s)
+=== RUN   TestWindowsExecutableLockDeniesReplacement
+--- PASS: TestWindowsExecutableLockDeniesReplacement (0.05s)
+=== RUN   TestWindowsRuntimeCleanupFailureRetainsAdmissionAndAllowsExplicitRetry
+=== RUN   TestWindowsRuntimeCleanupFailureRetainsAdmissionAndAllowsExplicitRetry/disconnect
+=== RUN   TestWindowsRuntimeCleanupFailureRetainsAdmissionAndAllowsExplicitRetry/connect
+=== RUN   TestWindowsRuntimeCleanupFailureRetainsAdmissionAndAllowsExplicitRetry/close
+--- PASS: TestWindowsRuntimeCleanupFailureRetainsAdmissionAndAllowsExplicitRetry (0.30s)
+    --- PASS: TestWindowsRuntimeCleanupFailureRetainsAdmissionAndAllowsExplicitRetry/disconnect (0.15s)
+    --- PASS: TestWindowsRuntimeCleanupFailureRetainsAdmissionAndAllowsExplicitRetry/connect (0.08s)
+    --- PASS: TestWindowsRuntimeCleanupFailureRetainsAdmissionAndAllowsExplicitRetry/close (0.07s)
+=== RUN   TestWindowsJobTerminationDoesNotRequireProcessTerminateRight
+--- PASS: TestWindowsJobTerminationDoesNotRequireProcessTerminateRight (0.03s)
+=== RUN   TestReviewSpecV02RejectUnsupportedImport
+=== RUN   TestReviewSpecV02RejectUnsupportedImport/no_vless
+=== RUN   TestReviewSpecV02RejectUnsupportedImport/ambiguous_two_vless
+=== RUN   TestReviewSpecV02RejectUnsupportedImport/missing_streamSettings
+--- PASS: TestReviewSpecV02RejectUnsupportedImport (0.00s)
+    --- PASS: TestReviewSpecV02RejectUnsupportedImport/no_vless (0.00s)
+    --- PASS: TestReviewSpecV02RejectUnsupportedImport/ambiguous_two_vless (0.00s)
+    --- PASS: TestReviewSpecV02RejectUnsupportedImport/missing_streamSettings (0.00s)
+=== RUN   TestReviewSpecV02RemoveDirectRouting
+--- PASS: TestReviewSpecV02RemoveDirectRouting (0.00s)
+=== RUN   TestReviewSpecV02CreatesExplicitRoute
+--- PASS: TestReviewSpecV02CreatesExplicitRoute (0.00s)
+=== RUN   TestReviewSpecV02CleansOrphanRuntime
+--- PASS: TestReviewSpecV02CleansOrphanRuntime (0.01s)
+=== RUN   TestReviewSpecV02RejectsUnverifiedExecutable
+--- PASS: TestReviewSpecV02RejectsUnverifiedExecutable (0.00s)
+=== RUN   TestRejectUnverifiedExecutable
+--- PASS: TestRejectUnverifiedExecutable (0.03s)
+=== RUN   TestExactExecutableDigest
+--- PASS: TestExactExecutableDigest (0.04s)
+=== RUN   TestDisconnectDuringPreparation
+--- PASS: TestDisconnectDuringPreparation (0.03s)
+=== RUN   TestRunningDisconnectWaitsOnceAndCleans
+--- PASS: TestRunningDisconnectWaitsOnceAndCleans (0.03s)
+=== RUN   TestCloseCancelsPreparationAndRejectsNewWork
+--- PASS: TestCloseCancelsPreparationAndRejectsNewWork (0.03s)
+=== RUN   TestPreflightErrorsNeverExposeCoreDiagnostics
+--- PASS: TestPreflightErrorsNeverExposeCoreDiagnostics (0.04s)
+=== RUN   TestUnexpectedExitIsNotHealthy
+--- PASS: TestUnexpectedExitIsNotHealthy (0.03s)
+=== RUN   TestStoreRoundTripAndTraversal
+--- PASS: TestStoreRoundTripAndTraversal (0.04s)
+=== RUN   TestOccupiedPortStopsBeforePreflight
+--- PASS: TestOccupiedPortStopsBeforePreflight (0.04s)
+=== RUN   TestRapidReconnectAndRevision
+--- PASS: TestRapidReconnectAndRevision (0.09s)
+=== RUN   TestHealthRepeatsSeriallyAndStops
+--- PASS: TestHealthRepeatsSeriallyAndStops (0.04s)
+=== RUN   TestHealthTwoFailuresAndRecovery
+--- PASS: TestHealthTwoFailuresAndRecovery (0.04s)
+=== RUN   TestOldSessionEventsIgnoredAndUniqueIDs
+--- PASS: TestOldSessionEventsIgnoredAndUniqueIDs (0.05s)
+=== RUN   TestSlowSubscriberDoesNotBlockManager
+--- PASS: TestSlowSubscriberDoesNotBlockManager (0.04s)
+=== RUN   TestStoreIODoesNotBlockDisconnectOrSnapshot
+--- PASS: TestStoreIODoesNotBlockDisconnectOrSnapshot (0.03s)
+=== RUN   TestRecentLogsBounded
+--- PASS: TestRecentLogsBounded (0.01s)
+=== RUN   TestLateProcessStartAfterCancelStillWaitsAndCleans
+--- PASS: TestLateProcessStartAfterCancelStillWaitsAndCleans (0.04s)
+=== RUN   TestDiagnosticAllowlistAndBound
+--- PASS: TestDiagnosticAllowlistAndBound (0.09s)
+=== RUN   TestCloseBoundsBlockedNotificationAndWaitsForChild
+--- PASS: TestCloseBoundsBlockedNotificationAndWaitsForChild (0.30s)
+=== RUN   TestFailedKillRetainsWaitAndOwnershipUntilActualExit
+--- PASS: TestFailedKillRetainsWaitAndOwnershipUntilActualExit (0.04s)
+=== RUN   TestStoreCrashRecoveryAndActiveInstance
+--- PASS: TestStoreCrashRecoveryAndActiveInstance (0.01s)
+=== RUN   TestRenameProfilePreservesIdentity
+--- PASS: TestRenameProfilePreservesIdentity (0.05s)
+=== RUN   TestStoreLockOwnerCrash
+--- PASS: TestStoreLockOwnerCrash (0.08s)
+=== RUN   TestSubscriptionFormatsAndMapping
+--- PASS: TestSubscriptionFormatsAndMapping (0.02s)
+=== RUN   TestSubscriptionQueryUTF8AndEscapedUnicode
+--- PASS: TestSubscriptionQueryUTF8AndEscapedUnicode (0.00s)
+=== RUN   TestSubscriptionNameMatchesPersistenceBounds
+=== RUN   TestSubscriptionNameMatchesPersistenceBounds/100-byte_multibyte_boundary
+=== RUN   TestSubscriptionNameMatchesPersistenceBounds/multibyte_overflow
+=== RUN   TestSubscriptionNameMatchesPersistenceBounds/trimmed_multibyte_boundary
+=== RUN   TestSubscriptionNameMatchesPersistenceBounds/whitespace_only
+=== RUN   TestSubscriptionNameMatchesPersistenceBounds/trimmed_name
+=== RUN   TestSubscriptionNameMatchesPersistenceBounds/existing_rune_bound
+=== RUN   TestSubscriptionNameMatchesPersistenceBounds/existing_control_rejection
+=== RUN   TestSubscriptionNameMatchesPersistenceBounds/missing_fragment_default
+--- PASS: TestSubscriptionNameMatchesPersistenceBounds (0.01s)
+    --- PASS: TestSubscriptionNameMatchesPersistenceBounds/100-byte_multibyte_boundary (0.00s)
+    --- PASS: TestSubscriptionNameMatchesPersistenceBounds/multibyte_overflow (0.00s)
+    --- PASS: TestSubscriptionNameMatchesPersistenceBounds/trimmed_multibyte_boundary (0.00s)
+    --- PASS: TestSubscriptionNameMatchesPersistenceBounds/whitespace_only (0.00s)
+    --- PASS: TestSubscriptionNameMatchesPersistenceBounds/trimmed_name (0.00s)
+    --- PASS: TestSubscriptionNameMatchesPersistenceBounds/existing_rune_bound (0.00s)
+    --- PASS: TestSubscriptionNameMatchesPersistenceBounds/existing_control_rejection (0.00s)
+    --- PASS: TestSubscriptionNameMatchesPersistenceBounds/missing_fragment_default (0.00s)
+=== RUN   TestSubscriptionRejectsAmbiguityAndUnsupportedInput
+--- PASS: TestSubscriptionRejectsAmbiguityAndUnsupportedInput (0.05s)
+=== RUN   TestSubscriptionHTTPSBoundsTLSRedirectAndCancellation
+2026/11/01 16:18:24 http: TLS handshake error from 127.0.0.1:61745: remote error: tls: bad certificate
+--- PASS: TestSubscriptionHTTPSBoundsTLSRedirectAndCancellation (0.23s)
+PASS
+ok  	github.com/slonikmak/XRay-mini/internal/core	6.972s

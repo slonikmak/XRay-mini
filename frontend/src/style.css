@@ -2,3 +2,4 @@
 /* Acknowledgment remains compact; generic text-input sizing must not affect checkboxes. */
 input[type=checkbox]{width:auto;margin:0 9px 0 0;vertical-align:middle;accent-color:var(--accent)}
 .alert label{line-height:1.6}.profile-footer{flex-wrap:wrap}.log-level.warning{color:#e2bd77}
+select{font:inherit;width:100%;padding:11px 12px;color:#e3ebee;background:#101923;border:1px solid #344454;border-radius:7px;outline-offset:4px}select:focus-visible{outline:2px solid var(--accent)}.subscription-actions{display:flex;gap:10px;margin-top:12px}
