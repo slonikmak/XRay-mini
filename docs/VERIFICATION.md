@@ -1,5 +1,7 @@
 # Verification — native Windows update, 2026-11-01
 
+[Concurrency termination/recovery fix](../_bmad-output/backlog/evidence/concurrency-recovery-2026-11-01.md): R3-01/02/03 repaired with terminal event ordering, explicit working-child stop retry and modal Disconnect during pending profile saves. Final production Go suite/vet, TypeScript/42 frontend tests, repeated service regressions, real Windows deny-delete cleanup case, real-core three-transport loopback, Wails build and offline package checks passed. Four independent review lenses ran; current findings were patched. Native failed-Kill recovery with an actual pending DPAPI GUI save remains unproven; preflight-child retry is explicitly deferred. The linked manifest holds the exact tested source/artifact identities.
+
 [Proxy-startup readiness fix](../_bmad-output/backlog/evidence/proxy-readiness-2026-11-01.md): delayed-listener/HTTP/TLS/deadline/cancellation regressions pass. Three native real-core starts passed their first production health check (3.037s,3.128s,1.401s from Connect), with Disconnect cleanup; this is backend evidence, not complete platform acceptance.
 
 Manual subscription import has a [separate real Windows GUI/external proxy report](../_bmad-output/backlog/evidence/subscription-acceptance-2026-11-01.md): five candidates loaded, one XHTTP/TLS endpoint passed HTTP/SOCKS HTTPS/egress and clean Disconnect. Other external transports and remaining system checks are still open.

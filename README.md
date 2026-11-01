@@ -54,9 +54,10 @@ save profiles or start Xray.
 
 Profiles use Windows DPAPI. Runtime JSON is briefly plaintext in a private DACL-protected directory; normal cleanup removes it. An exclusive per-data-directory OS lock prevents another instance from deleting an active session; startup removes stale `runtime-*` after acquiring that lock. This is not secure disk erasure, nor protection against a compromised user/admin. Non-Windows storage is development-only, not DPAPI-equivalent.
 
-If runtime cleanup is blocked, another working Xray is not admitted. Remove the
-external file block and press Connect once to request cleanup, then connect after
-cleanup finishes; API Disconnect or Close can also retry. Close reports unconfirmed
+If stopping or runtime cleanup fails, another working Xray is not admitted.
+Remove any external file block and use Retry stop to request one new stop/cleanup
+attempt; Disconnect or Close can retry through the API. Connect becomes available
+after cleanup releases the session. Close reports unconfirmed
 session cleanup after five seconds and bounds notification drain to 250ms. A blocked
 notification callback may remain until it returns, but does not cause more callback
 workers to be spawned or turn unconfirmed process cleanup into success.

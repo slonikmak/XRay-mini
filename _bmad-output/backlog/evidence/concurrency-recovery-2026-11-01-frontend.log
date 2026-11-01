@@ -1,0 +1,31 @@
+
+> xray-mini-frontend@0.1.0 test
+> vitest run
+
+
+ RUN  v3.2.7 C:/Users/kp/Documents/projects/XRay-mini/frontend
+
+ ✓ src/bridge.test.ts (5 tests) 14ms
+stderr | src/App.test.tsx
+
+⚠️ Browser Environment Detected 
+
+Only UI previews are available in the browser. For full functionality, please run the application in desktop mode.
+More information at: https://v3.wails.io/learn/build/#using-a-browser-for-development
+
+
+ ✓ src/App.test.tsx (37 tests) 6738ms
+   ✓ desktop UI > stops inside a modal before pending rename storage completes  382ms
+   ✓ desktop UI > stops inside a modal before pending subscription storage completes  416ms
+   ✓ desktop UI > offers a reachable stopped connection action and cancels loading without late results  366ms
+   ✓ desktop UI > offers a reachable running connection action and cancels loading without late results  411ms
+   ✓ desktop UI > offers a reachable preparing connection action and cancels loading without late results  369ms
+   ✓ desktop UI > awaits all serialized clears before starting a new subscription preview  310ms
+   ✓ desktop UI > invalidates candidates on source edits and clears the backend preview on unmount  375ms
+   ✓ desktop UI > requires explicit acknowledgment of discarded sections and invalidates preview when edited  392ms
+
+ Test Files  2 passed (2)
+      Tests  42 passed (42)
+   Start at  21:10:49
+   Duration  8.88s (transform 358ms, setup 0ms, collect 769ms, tests 6.75s, environment 1.74s, prepare 619ms)
+

@@ -1,0 +1,6 @@
+Package ready: bin (file completeness and pinned Xray 26.10.29; GUI hash is informational)
+GUI PE structure checked; signature/source integrity is not established.
+SHA-256 235f72a5d2b41f36085287a375dc273ab9de3cc10f66057a32082c0dfb450b18  bin\XrayMini.exe
+SHA-256 07a332b714a3c0eee047a22a9c0ea749b64df33e4e1ff6d28a8c7f9ef943ce10  bin\runtime\xray.exe
+SHA-256 1f256ecad192880510e84ad60474eab7589218784b9a50bc7ceee34c2b91f1d5  bin\runtime\Xray-core-LICENSE
+SHA-256 2e233631cb020c2889d6a8fc1276b7ff3973576fa32edb0366f8ff41388ae6ea  bin\runtime\NOTICE.md

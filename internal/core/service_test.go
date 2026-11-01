@@ -18,11 +18,19 @@ type fakeChild struct {
 	done      chan error
 	once      sync.Once
 	waits     atomic.Int32
+	kills     atomic.Int32
 	killError error
+	killHook  func() error
 }
 
 func (c *fakeChild) Wait() error { c.waits.Add(1); return <-c.done }
 func (c *fakeChild) Kill() error {
+	c.kills.Add(1)
+	if c.killHook != nil {
+		if err := c.killHook(); err != nil {
+			return err
+		}
+	}
 	if c.killError != nil {
 		return c.killError
 	}
@@ -75,7 +83,8 @@ func waitState(t *testing.T, s *Service, state string) {
 	t.Helper()
 	deadline := time.Now().Add(2 * time.Second)
 	for time.Now().Before(deadline) {
-		if s.GetStatus().ProcessState == state {
+		status := s.GetStatus()
+		if status.ProcessState == state && ((state != "stopped" && state != "error") || status.SessionID == "") {
 			return
 		}
 		time.Sleep(time.Millisecond)
@@ -316,10 +325,22 @@ func TestOldSessionEventsIgnoredAndUniqueIDs(t *testing.T) {
 	if old == s.GetStatus().SessionID {
 		t.Fatal("session ID reused")
 	}
-	s.events <- workerEvent{sessionID: old, kind: "StopCompleted", message: "stale failure"}
-	time.Sleep(5 * time.Millisecond)
-	if s.GetStatus().Message == "stale failure" {
-		t.Fatal("old event changed state")
+	waitForService(t, func() bool { return s.GetStatus().State == "Connected" })
+	before := s.GetStatus()
+	for _, kind := range []string{"ProcessExited", "ProcessStarted", "ProxyReady", "HealthFailed", "ConfigValidated", "CleanupFailed", "StopFailed", "StopCompleted"} {
+		s.events <- workerEvent{sessionID: old, kind: kind, message: "stale failure", ok: true}
+	}
+	s.events <- workerEvent{sessionID: before.SessionID, kind: "Diagnostic", message: "xray-warning", at: time.Now()}
+	waitForService(t, func() bool {
+		for _, log := range s.GetLogs() {
+			if log.Message == "xray-warning" {
+				return true
+			}
+		}
+		return false
+	})
+	if s.GetStatus() != before {
+		t.Fatalf("old event changed new session: %+v", s.GetStatus())
 	}
 }
 func TestSlowSubscriberDoesNotBlockManager(t *testing.T) {
@@ -492,8 +513,226 @@ func TestFailedKillRetainsWaitAndOwnershipUntilActualExit(t *testing.T) {
 		t.Fatal("Wait not owned exactly once")
 	}
 	r.child.once.Do(func() { r.child.done <- nil })
+	// Sending the fake's result only makes Wait runnable. A Close before the
+	// manager observes ProcessExited legitimately retries the still-failing Kill.
+	waitForService(t, func() bool { return s.GetStatus().ProcessState == "stopped" })
 	if err := s.Close(); err != nil {
 		t.Fatal(err)
 	}
+	if r.child.waits.Load() != 1 || s.GetStatus().SessionID != "" {
+		t.Fatalf("Close did not join the owned exit/cleanup: %+v", s.GetStatus())
+	}
 	assertNoRuntime(t, s)
+}
+
+func TestExitedSessionRejectsLateEventsUntilCleanup(t *testing.T) {
+	for _, kind := range []string{"ProcessStarted", "ProxyReady", "HealthFailed", "ConfigValidated", "StopFailed"} {
+		t.Run(kind, func(t *testing.T) {
+			s, p, _, r := fixture(t)
+			probeEntered, releaseProbe := make(chan struct{}), make(chan struct{})
+			var releaseOnce sync.Once
+			s.probe = func(ctx context.Context) bool { close(probeEntered); <-ctx.Done(); <-releaseProbe; return true }
+			defer releaseOnce.Do(func() { close(releaseProbe) })
+			s.Connect(p.ID)
+			<-probeEntered
+			id := s.GetStatus().SessionID
+			s.events <- workerEvent{sessionID: id, kind: "ProcessExited", ok: true}
+			s.events <- workerEvent{sessionID: id, kind: kind, ok: true, at: time.Now()}
+			s.events <- workerEvent{sessionID: id, kind: "Diagnostic", message: "xray-warning", at: time.Now()}
+			waitForService(t, func() bool {
+				for _, log := range s.GetLogs() {
+					if log.Message == "xray-warning" {
+						return true
+					}
+				}
+				return false
+			})
+			st := s.GetStatus()
+			if st.ProcessState != "stopped" || st.NetworkHealth == "healthy" || st.SessionID != id || !strings.Contains(st.Message, "unexpectedly") {
+				t.Fatalf("late %s resurrected/lost terminal state: %+v", kind, st)
+			}
+			if _, err := s.Connect(p.ID); err == nil {
+				t.Fatal("connected before cleanup")
+			}
+			st = s.Disconnect()
+			if st.ProcessState != "stopped" || !strings.Contains(st.Message, "unexpectedly") {
+				t.Fatalf("Disconnect erased exit cause: %+v", st)
+			}
+			// StopCompleted must retain the cause even though manager cancellation
+			// has already reached the supervisor.
+			releaseOnce.Do(func() { close(releaseProbe) })
+			waitState(t, s, "error")
+			if !strings.Contains(s.GetStatus().Message, "unexpectedly") || r.child.waits.Load() != 1 {
+				t.Fatalf("final cause or Wait ownership lost: %+v", s.GetStatus())
+			}
+			assertNoRuntime(t, s)
+		})
+	}
+}
+
+func TestUnexpectedExitFactSurvivesStopCommandBeforeEvent(t *testing.T) {
+	s, p, _, r := fixture(t)
+	entered, release := make(chan struct{}), make(chan struct{})
+	releaseKill := make(chan struct{})
+	var releaseKillOnce sync.Once
+	defer releaseKillOnce.Do(func() { close(releaseKill) })
+	r.child.killHook = func() error { <-releaseKill; return nil }
+	var releaseOnce sync.Once
+	defer releaseOnce.Do(func() { close(release) })
+	s.probe = func(ctx context.Context) bool { close(entered); <-ctx.Done(); <-release; return false }
+	s.Connect(p.ID)
+	<-entered
+	// Wait captured an unexpected exit before publishing. Force the stop
+	// command to be consumed before that captured fact reaches the manager.
+	exit := workerEvent{sessionID: s.GetStatus().SessionID, kind: "ProcessExited", ok: true}
+	s.Disconnect()
+	s.events <- exit
+	waitForService(t, func() bool { return s.GetStatus().ProcessState == "stopped" })
+	st := s.GetStatus()
+	if st.State != "Error" || st.SessionID == "" || !strings.Contains(st.Message, "unexpectedly") {
+		t.Fatalf("stop command erased captured unexpected exit: %+v", st)
+	}
+	releaseKillOnce.Do(func() { close(releaseKill) })
+	releaseOnce.Do(func() { close(release) })
+	waitState(t, s, "error")
+	if !strings.Contains(s.GetStatus().Message, "unexpectedly") {
+		t.Fatal("cleanup erased captured exit cause")
+	}
+}
+
+func TestRepeatedStopBeforeFailureNotificationRetriesOnce(t *testing.T) {
+	s, p, _, r := fixture(t)
+	r.child.killHook = func() error {
+		switch r.child.kills.Load() {
+		case 1:
+			s.Disconnect() // consumed before the first StopFailed can be sent
+			return errors.New("first stop failed")
+		case 2:
+			return errors.New("second stop failed")
+		}
+		return nil
+	}
+	t.Cleanup(func() { r.child.once.Do(func() { r.child.done <- nil }) })
+	s.Connect(p.ID)
+	waitState(t, s, "running")
+	s.Disconnect()
+	waitForService(t, func() bool { return r.child.kills.Load() == 2 && s.GetStatus().State == "Error" })
+	if s.GetStatus().SessionID == "" || r.child.waits.Load() != 1 {
+		t.Fatal("failed attempts lost session/Wait ownership")
+	}
+	time.Sleep(10 * time.Millisecond)
+	if r.child.kills.Load() != 2 {
+		t.Fatal("failed stop retried without another explicit request")
+	}
+	s.Disconnect()
+	waitState(t, s, "stopped")
+	if r.child.kills.Load() != 3 || r.child.waits.Load() != 1 {
+		t.Fatalf("kills=%d waits=%d", r.child.kills.Load(), r.child.waits.Load())
+	}
+}
+
+func waitForService(t *testing.T, condition func() bool) {
+	t.Helper()
+	deadline := time.Now().Add(time.Second)
+	for time.Now().Before(deadline) {
+		if condition() {
+			return
+		}
+		time.Sleep(time.Millisecond)
+	}
+	t.Fatal("service condition not reached")
+}
+
+func TestCancelledSessionRejectsLateProgressUntilCleanup(t *testing.T) {
+	s, p, _, r := fixture(t)
+	entered, release := make(chan struct{}), make(chan struct{})
+	var releaseOnce sync.Once
+	defer releaseOnce.Do(func() { close(release) })
+	r.preflight = func(ctx context.Context, _ string) error {
+		close(entered)
+		<-ctx.Done()
+		<-release
+		return ctx.Err()
+	}
+	s.Connect(p.ID)
+	<-entered
+	before := s.Disconnect()
+	for _, kind := range []string{"ConfigValidated", "ProcessStarted", "ProxyReady", "HealthFailed"} {
+		s.events <- workerEvent{sessionID: before.SessionID, kind: kind, ok: true, at: time.Now()}
+	}
+	s.events <- workerEvent{sessionID: before.SessionID, kind: "Diagnostic", message: "xray-warning", at: time.Now()}
+	waitForService(t, func() bool {
+		for _, log := range s.GetLogs() {
+			if log.Message == "xray-warning" {
+				return true
+			}
+		}
+		return false
+	})
+	if s.GetStatus() != before {
+		t.Fatalf("late progress changed canceled session: %+v", s.GetStatus())
+	}
+	if _, err := s.Connect(p.ID); err == nil {
+		t.Fatal("connected before canceled worker cleanup")
+	}
+	releaseOnce.Do(func() { close(release) })
+	waitState(t, s, "stopped")
+	assertNoRuntime(t, s)
+}
+
+func TestExplicitStopRetriesFailedKillWithoutAnotherWait(t *testing.T) {
+	for _, recovery := range []string{"disconnect", "close"} {
+		t.Run(recovery, func(t *testing.T) {
+			s, p, _, r := fixture(t)
+			r.child.killHook = func() error {
+				if r.child.kills.Load() <= 3 {
+					return errors.New("private-stop-detail")
+				}
+				return nil
+			}
+			t.Cleanup(func() { r.child.once.Do(func() { r.child.done <- nil }) })
+			s.Connect(p.ID)
+			waitState(t, s, "running")
+			for attempt := int32(1); attempt <= 3; attempt++ {
+				if recovery == "close" {
+					if err := s.Close(); !errors.Is(err, errStopPending) {
+						t.Fatalf("Close did not report failed stop: %v", err)
+					}
+				} else {
+					s.Disconnect()
+				}
+				waitForService(t, func() bool { return s.GetStatus().State == "Error" && r.child.kills.Load() == attempt })
+				st := s.GetStatus()
+				if st.SessionID == "" || st.ProcessState != "stopping" || strings.Contains(st.Message, "private") {
+					t.Fatalf("lost stop ownership: %+v", st)
+				}
+				if _, err := s.Connect(p.ID); err == nil {
+					t.Fatal("connected while stop failed")
+				}
+				if replacement, err := NewService(s.store.dir); err == nil {
+					replacement.Close()
+					t.Fatal("released store while child owned")
+				}
+				time.Sleep(5 * time.Millisecond)
+				if r.child.kills.Load() != attempt {
+					t.Fatal("automatic stop retry")
+				}
+			}
+			if recovery == "close" {
+				if err := s.Close(); err != nil {
+					t.Fatal(err)
+				}
+			} else {
+				s.Disconnect()
+				waitState(t, s, "stopped")
+			}
+			if r.child.kills.Load() != 4 || r.child.waits.Load() != 1 {
+				t.Fatalf("kills=%d waits=%d", r.child.kills.Load(), r.child.waits.Load())
+			}
+			if s.GetStatus().SessionID != "" {
+				t.Fatal("completed cleanup retained session ID")
+			}
+			assertNoRuntime(t, s)
+		})
+	}
 }

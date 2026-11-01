@@ -275,7 +275,10 @@ func nativeTransportCase(t *testing.T, network, security string) {
 		if err := runner.childrenSnapshot()[0].Kill(); err != nil {
 			t.Fatal("cannot terminate owned working child")
 		}
-		nativeWait(t, "Error after real working child exit", func() bool { return s.GetStatus().State == "Error" })
+		nativeWait(t, "Error after real working child exit and cleanup", func() bool {
+			status := s.GetStatus()
+			return status.State == "Error" && status.SessionID == ""
+		})
 		t.Log("PASS real working child exit becomes Error after cleanup")
 	} else {
 		s.Disconnect()

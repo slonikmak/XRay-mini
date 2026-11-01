@@ -1,0 +1,4 @@
+ok  	github.com/slonikmak/XRay-mini	2.626s
+?   	github.com/slonikmak/XRay-mini/integration/prepareconfig	[no test files]
+?   	github.com/slonikmak/XRay-mini/integration/tlstarget	[no test files]
+ok  	github.com/slonikmak/XRay-mini/internal/core	8.456s

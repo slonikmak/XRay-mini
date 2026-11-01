@@ -1,0 +1,26 @@
+=== RUN   TestNativeWindowsLoopback
+    native_transport_windows_test.go:50: verified Xray 26.10.29 sha256=07a332b714a3c0eee047a22a9c0ea749b64df33e4e1ff6d28a8c7f9ef943ce10; native Windows loopback only
+=== RUN   TestNativeWindowsLoopback/raw-reality
+    native_transport_windows_test.go:53: PASS duplicate Connect rejected while Connected; client launches=1
+    native_transport_windows_test.go:53: PASS http target response
+    native_transport_windows_test.go:53: PASS socks5 target response
+    native_transport_windows_test.go:53: PASS Connecting gate; stopped peer blocks both proxies; Degraded; restored peer returns Connected; client launches=1
+    native_transport_windows_test.go:53: PASS real working child exit becomes Error after cleanup
+=== RUN   TestNativeWindowsLoopback/xhttp-reality
+    native_transport_windows_test.go:53: PASS duplicate Connect rejected while Connected; client launches=1
+    native_transport_windows_test.go:53: PASS http target response
+    native_transport_windows_test.go:53: PASS socks5 target response
+    native_transport_windows_test.go:53: PASS Connecting gate; stopped peer blocks both proxies; Degraded; restored peer returns Connected; client launches=1
+    native_transport_windows_test.go:53: PASS Disconnect becomes Disconnected after cleanup
+=== RUN   TestNativeWindowsLoopback/xhttp-tls
+    native_transport_windows_test.go:53: PASS duplicate Connect rejected while Connected; client launches=1
+    native_transport_windows_test.go:53: PASS http target response
+    native_transport_windows_test.go:53: PASS socks5 target response
+    native_transport_windows_test.go:53: PASS Connecting gate; stopped peer blocks both proxies; Degraded; restored peer returns Connected; client launches=1
+    native_transport_windows_test.go:53: PASS Disconnect becomes Disconnected after cleanup
+    native_transport_windows_test.go:53: PASS wrong leaf pin rejects both proxies with peer alive throughout; correct pin then succeeds through both proxies
+--- PASS: TestNativeWindowsLoopback (11.53s)
+    --- PASS: TestNativeWindowsLoopback/raw-reality (6.45s)
+    --- PASS: TestNativeWindowsLoopback/xhttp-reality (1.95s)
+    --- PASS: TestNativeWindowsLoopback/xhttp-tls (2.89s)
+PASS

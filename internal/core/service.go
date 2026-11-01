@@ -35,7 +35,7 @@ const (
 )
 
 var (
-	errCleanupPending        = errors.New("temporary configuration cleanup failed; remove the block and retry Connect, Disconnect or Close")
+	errCleanupPending        = errors.New("temporary configuration cleanup failed; remove the block and use Retry stop, Disconnect or Close")
 	errCleanupRetryRequested = errors.New("temporary configuration cleanup retry requested; connect again after cleanup finishes")
 	errStopPending           = errors.New("Xray stop is not confirmed; process and storage ownership are retained")
 	errNotificationPending   = errors.New("status notification delivery is incomplete; a callback is still running")
@@ -46,7 +46,10 @@ type session struct {
 	cancel         context.CancelFunc
 	id, profileID  string
 	retryCleanup   chan struct{}
+	retryStop      chan struct{}
 	cleanupBlocked bool // written only by Service.loop
+	exited         bool // process exit is terminal, independently of cleanup
+	exitFailure    string
 }
 type command struct {
 	kind, id string
@@ -217,7 +220,7 @@ func (s *Service) Disconnect() Status { return s.request("disconnect", "").statu
 
 // Close waits at most five seconds for session cleanup, then at most 250ms for
 // notification delivery. A session cleanup error retains ownership; another Close explicitly
-// retries failed file cleanup. A blocked callback can outlive Close until it returns.
+// retries a failed process stop or file cleanup. A blocked callback can outlive Close until it returns.
 func (s *Service) Close() error {
 	s.closeMu.Lock()
 	defer s.closeMu.Unlock()
@@ -306,6 +309,21 @@ func (s *Service) loop() {
 			}
 		}
 	}
+	requestStop := func() {
+		repeated := active.ctx.Err() != nil
+		active.cancel()
+		retryCleanup()
+		if repeated && !active.exited {
+			// Retain an explicit repeat even if its command overtakes StopFailed.
+			select {
+			case active.retryStop <- struct{}{}:
+			default:
+			}
+		}
+		if !active.exited {
+			publish("Disconnecting", "stopping", "unknown", "Stopping local proxy")
+		}
+	}
 	for {
 		select {
 		case c := <-s.commands:
@@ -317,7 +335,11 @@ func (s *Service) loop() {
 				} else if active != nil && active.cleanupBlocked {
 					retryCleanup()
 					err = errCleanupRetryRequested
-					publish("Error", "stopped", "unknown", err.Error())
+					message := err.Error()
+					if active.exitFailure != "" {
+						message = active.exitFailure + "; " + message
+					}
+					publish("Error", "stopped", "unknown", message)
 				} else if active != nil {
 					err = errors.New("a session is active or still cleaning up")
 				} else if !validID(c.id) {
@@ -330,7 +352,7 @@ func (s *Service) loop() {
 						err = errors.New("cannot create session ID")
 					} else {
 						ctx, cancel := context.WithCancel(context.Background())
-						active = &session{ctx: ctx, cancel: cancel, id: hex.EncodeToString(id[:]), profileID: c.id, retryCleanup: make(chan struct{}, 1)}
+						active = &session{ctx: ctx, cancel: cancel, id: hex.EncodeToString(id[:]), profileID: c.id, retryCleanup: make(chan struct{}, 1), retryStop: make(chan struct{}, 1)}
 						status.ProfileID = c.id
 						status.SessionID = active.id
 						status.LastCheckedAt = ""
@@ -341,9 +363,7 @@ func (s *Service) loop() {
 				}
 			case "disconnect":
 				if active != nil {
-					active.cancel()
-					retryCleanup()
-					publish("Disconnecting", "stopping", "unknown", "Stopping local proxy")
+					requestStop()
 				}
 			case "reserve-delete":
 				if closing {
@@ -360,9 +380,7 @@ func (s *Service) loop() {
 			case "close":
 				closing = true
 				if active != nil {
-					active.cancel()
-					retryCleanup()
-					publish("Disconnecting", "stopping", "unknown", "Stopping local proxy")
+					requestStop()
 				}
 			}
 			c.reply <- commandResult{status, err}
@@ -375,18 +393,29 @@ func (s *Service) loop() {
 			}
 			if ev.kind == "CleanupFailed" {
 				active.cleanupBlocked = true
-				publish("Error", "stopped", "unknown", errCleanupPending.Error())
+				message := errCleanupPending.Error()
+				if active.exitFailure != "" {
+					message = active.exitFailure + "; " + message
+				}
+				publish("Error", "stopped", "unknown", message)
 				reportCloseError(errCleanupPending)
 				continue
 			}
 			if ev.kind == "StopFailed" {
+				if active.exited {
+					continue
+				}
 				publish("Error", "stopping", "unknown", errStopPending.Error())
 				reportCloseError(errStopPending)
 				continue
 			}
 			if ev.kind == "StopCompleted" {
 				active.cancel()
+				if active.exitFailure != "" {
+					ev.message = active.exitFailure
+				}
 				active = nil
+				status.SessionID = ""
 				if ev.message != "" {
 					publish("Error", "error", "unknown", ev.message)
 				} else {
@@ -398,7 +427,22 @@ func (s *Service) loop() {
 				}
 				continue
 			}
-			if active.ctx.Err() != nil && ev.kind != "Diagnostic" {
+			if ev.kind == "ProcessExited" {
+				if !active.exited {
+					active.exited = true
+					if ev.ok {
+						active.exitFailure = "Xray exited unexpectedly; no automatic restart was attempted"
+					}
+					active.cancel()
+					if active.exitFailure != "" {
+						publish("Error", "stopped", "unknown", active.exitFailure)
+					} else {
+						publish("Disconnecting", "stopped", "unknown", "Xray stopped; cleaning up session resources")
+					}
+				}
+				continue
+			}
+			if (active.exited || active.ctx.Err() != nil) && ev.kind != "Diagnostic" {
 				continue
 			}
 			switch ev.kind {
@@ -411,8 +455,6 @@ func (s *Service) loop() {
 					}
 					s.logSnapshot.Store(append([]LogEntry{}, logs...))
 				}
-			case "ProcessExited":
-			// Cleanup confirmation, not process exit alone, permits another Connect.
 			case "ConfigValidated":
 				publish("Connecting", "preparing", "unknown", "Xray configuration validated; network not yet checked")
 			case "ProcessStarted":
@@ -441,7 +483,6 @@ func (s *Service) run(run *session) {
 	failure := ""
 	tempDir := ""
 	defer func() {
-		run.cancel()
 		if tempDir != "" {
 			for os.RemoveAll(tempDir) != nil {
 				s.event(run, "CleanupFailed", "", false)
@@ -509,7 +550,10 @@ func (s *Service) run(run *session) {
 	exited := make(chan error, 1)
 	go func() {
 		err := child.Wait()
-		s.event(run, "ProcessExited", "", false)
+		// Capture the exit fact before queueing: a later stop command may be
+		// consumed first, but cannot change why this Wait completed.
+		unexpected := run.ctx.Err() == nil
+		s.event(run, "ProcessExited", "", unexpected)
 		exited <- err
 	}()
 	seenDiagnostics := map[string]bool{}
@@ -558,11 +602,25 @@ func (s *Service) run(run *session) {
 	for {
 		select {
 		case <-run.ctx.Done():
-			if err := child.Kill(); err != nil {
+			for {
+				select {
+				case <-exited:
+					return
+				default:
+				}
+				if err := child.Kill(); err == nil {
+					<-exited
+					return
+				}
 				s.event(run, "StopFailed", "", false)
+				// A failed attempt waits for actual exit or one explicit retry.
+				// Do not re-select the already canceled session context.
+				select {
+				case <-exited:
+					return
+				case <-run.retryStop:
+				}
 			}
-			<-exited
-			return
 		case <-exited:
 			if run.ctx.Err() == nil {
 				failure = "Xray exited unexpectedly; no automatic restart was attempted"

@@ -1,0 +1,163 @@
+{
+  "schema_version": 1,
+  "started_at_utc": "2026-11-01T20:14:44.649217+00:00",
+  "finished_at_utc": "2026-11-01T20:14:45.291273+00:00",
+  "command": [
+    "concurrency_recovery_verification_snapshot"
+  ],
+  "scope": "windows11-concurrency-recovery",
+  "app": {
+    "status": "available",
+    "revision": "eed355017638e1834a957808438148cff1a011eb",
+    "dirty": true
+  },
+  "environment": {
+    "system": "Windows",
+    "release": "11",
+    "version": "10.0.26300",
+    "machine": "AMD64"
+  },
+  "tools": {
+    "python": {
+      "status": "available",
+      "version": "3.12.10"
+    },
+    "go": {
+      "status": "available",
+      "version": "1.26.10"
+    },
+    "wails": {
+      "status": "available",
+      "version": "3.0.0"
+    },
+    "webview2": {
+      "status": "available",
+      "version": "156.0.4314.58"
+    }
+  },
+  "artifacts": {
+    "gui": {
+      "status": "available",
+      "sha256": "235f72a5d2b41f36085287a375dc273ab9de3cc10f66057a32082c0dfb450b18"
+    },
+    "runtime": {
+      "status": "available",
+      "sha256": "07a332b714a3c0eee047a22a9c0ea749b64df33e4e1ff6d28a8c7f9ef943ce10"
+    },
+    "native_test": {
+      "status": "available",
+      "sha256": "8100dcbb6579082bb031a84e7ea7fafd1140337c366fa54a691c1e078c205029"
+    }
+  },
+  "tests": [
+    {
+      "scenario": "baseline_terminal_and_retry_regressions_fail_as_expected",
+      "outcome": "PASS"
+    },
+    {
+      "scenario": "baseline_ui_regressions_fail_as_expected",
+      "outcome": "PASS"
+    },
+    {
+      "scenario": "terminal_late_events_and_stop_failure",
+      "outcome": "PASS"
+    },
+    {
+      "scenario": "captured_exit_fact_survives_overtaking_stop",
+      "outcome": "PASS"
+    },
+    {
+      "scenario": "explicit_retry_survives_overtaking_failure_event",
+      "outcome": "PASS"
+    },
+    {
+      "scenario": "disconnect_close_repeated_retry_one_wait_ownership",
+      "outcome": "PASS"
+    },
+    {
+      "scenario": "native_windows_deny_delete_unexpected_exit_cleanup_retry",
+      "outcome": "PASS"
+    },
+    {
+      "scenario": "held_rename_json_delete_subscription_modal_stop",
+      "outcome": "PASS"
+    },
+    {
+      "scenario": "independent_profile_connection_feedback",
+      "outcome": "PASS"
+    },
+    {
+      "scenario": "retained_cleanup_ui_and_late_bridge_subscription",
+      "outcome": "PASS"
+    },
+    {
+      "scenario": "full_production_go_suite",
+      "outcome": "PASS"
+    },
+    {
+      "scenario": "production_go_vet",
+      "outcome": "PASS"
+    },
+    {
+      "scenario": "frontend_typecheck",
+      "outcome": "PASS"
+    },
+    {
+      "scenario": "frontend_42_tests",
+      "outcome": "PASS"
+    },
+    {
+      "scenario": "service_tests_10_repetitions",
+      "outcome": "PASS"
+    },
+    {
+      "scenario": "real_core_three_transport_native_loopback",
+      "outcome": "PASS"
+    },
+    {
+      "scenario": "production_wails_build",
+      "outcome": "PASS"
+    },
+    {
+      "scenario": "offline_package_verification",
+      "outcome": "PASS"
+    }
+  ],
+  "result": "PASS",
+  "failure_category": null,
+  "cleanup": {
+    "status": "PASS",
+    "checks": {
+      "native_suite_cleanup_confirmed": true,
+      "native_test_executable_outside_package": true
+    }
+  },
+  "record_kind": "post_execution_snapshot",
+  "webview2_observation": "installed runtime directory; packaged GUI interaction not rerun",
+  "source_sha256": {
+    "internal/core/service.go": "e47883df294bff8b9e882b9066cf726f42ff67c6235435b870f46622c84deb3f",
+    "internal/core/service_test.go": "3fcc34d6d36cfa634f637b43d8ddd12b86ff536dea5753e878e095b40c37ee82",
+    "internal/core/process_windows_test.go": "74466f80c2d0da2276a15e4558ea682dc60a66b3a6048d005fd855df59dc071f",
+    "internal/core/native_transport_windows_test.go": "31b5a764f01b9336f34a11d278d2e21deac155e86f50c2741600ec86dd23129d",
+    "frontend/src/App.tsx": "c1557567f20ffe8a003fd8fe6c2eb368bf8dbceeb0b375932fef8e06170036bb",
+    "frontend/src/App.test.tsx": "7abdb73f7eb512000bcdc9c74c0d7112e2f79db1230e167eabda60462ea2c876"
+  },
+  "review_input_sha256": "152017eb58646ab883d42e2801afb9558757882cb890601dbd0a6ddc93ffd513",
+  "scope_limits": [
+    "working-child Kill failure is simulated; native failed-Kill recovery and actual pending DPAPI GUI save were not exercised",
+    "loopback fixtures do not establish external-peer acceptance",
+    "Windows race instrumentation unavailable without C toolchain",
+    "existing failed preflight-child termination retry deferred",
+    "cross-user DPAPI and remaining full native GUI/stress acceptance open"
+  ],
+  "review": {
+    "lenses": [
+      "blind-hunter",
+      "edge-case-hunter",
+      "verification-gap",
+      "intent-alignment"
+    ],
+    "surviving_current_change_findings": "patched and verified",
+    "preexisting_deferred": 1
+  }
+}

@@ -16,6 +16,10 @@ A serial checker begins immediately after startup, then on a 30-second ticker. W
 
 React subscribes to `connection:state-changed` before loading the initial snapshot, drops older revisions and resynchronizes on focus/visibility. Reopening a window does not recreate backend connection state.
 
+ProcessExited is terminal within its session: the manager records stopped/unknown, cancels remaining work, and rejects subsequent operational events. The waiter captures whether exit was unexpected before publishing; later stop commands cannot erase that fact. SessionID remains present until StopCompleted, then is cleared, including on final Error. A stopped process and a released session are different facts. After a failed Kill of the working child, the worker waits for actual exit or one explicit Disconnect/Close retry; it never spins on a canceled context. A bounded retry signal also retains a repeated stop command that overtakes StopFailed. Wait and resources keep the same owner. The native adapter's initial cancellation Kill remains separate from subsequent explicit supervisor retries.
+
+Profile mutations and connection commands have separate UI locks. Every open profile modal exposes the active session's Stop/Retry stop action, including during a pending save. Error with retained sessionID permits recovery; ordinary stopping remains disabled. A cleaned connection failure permits profile repair and another Connect. Focus/visibility recovery also registers a missing late-host subscription before requesting its snapshot; subsequent events need no further focus. There is no claim of host discovery without one of those existing recovery triggers.
+
 The Wails facade retains safe core startup errors while allowing the native window to open. GetStatus exposes Error and the pinned runtime version; mutations still fail. Status refresh applies independently of failed or pending profile/log requests. Native host availability is detected independently of ancillary API success, including late host injection.
 
 ## Trust, storage and crash containment
@@ -28,4 +32,4 @@ Native Windows CreateProcess receives STARTUPINFOEX with JOB_LIST and an explici
 
 ## Remaining acceptance
 
-Code and cross-compilation are not native execution evidence. Windows 10/11, nested-job behavior, crash races, DPAPI, DACL, WebView2 and real transport integration are tracked separately in VERIFICATION.md. TUN, system settings, auto-restart/update and arbitrary Xray configuration are deliberately out of scope.
+Code and cross-compilation are not native execution evidence. Windows 11 with installed WebView2, nested-job behavior, crash races, DPAPI, DACL and real transport integration are tracked separately in VERIFICATION.md and ACCEPTANCE-SCOPE.md. TUN, system settings, auto-restart/update and arbitrary Xray configuration are deliberately out of scope.

@@ -213,6 +213,56 @@ func TestWindowsRuntimeCleanupFailureRetainsAdmissionAndAllowsExplicitRetry(t *t
 	}
 }
 
+func TestWindowsUnexpectedExitSurvivesCleanupFailureAndRetry(t *testing.T) {
+	s, p, _, r := fixture(t)
+	var handle syscall.Handle
+	var releaseOnce sync.Once
+	release := func() { releaseOnce.Do(func() { syscall.CloseHandle(handle) }) }
+	t.Cleanup(release)
+	r.preflight = func(_ context.Context, config string) error {
+		name, err := syscall.UTF16PtrFromString(config)
+		if err != nil {
+			return err
+		}
+		handle, err = syscall.CreateFile(name, syscall.GENERIC_READ,
+			syscall.FILE_SHARE_READ|syscall.FILE_SHARE_WRITE, nil, syscall.OPEN_EXISTING, 0, 0)
+		return err
+	}
+	if _, err := s.Connect(p.ID); err != nil {
+		t.Fatal(err)
+	}
+	waitState(t, s, "running")
+	id := s.GetStatus().SessionID
+	r.child.once.Do(func() { r.child.done <- errors.New("private-exit-detail") })
+	assertBlocked := func(after uint64) {
+		t.Helper()
+		waitForService(t, func() bool {
+			st := s.GetStatus()
+			return st.Revision > after && strings.Contains(st.Message, errCleanupPending.Error())
+		})
+		st := s.GetStatus()
+		if st.State != "Error" || st.ProcessState != "stopped" || st.SessionID != id ||
+			!strings.Contains(st.Message, "unexpectedly") || strings.Contains(st.Message, "private-exit-detail") {
+			t.Fatalf("cleanup lost safe exit cause or ownership: %+v", st)
+		}
+	}
+	assertBlocked(0)
+	if _, err := s.Connect(p.ID); !errors.Is(err, errCleanupRetryRequested) {
+		t.Fatalf("cleanup admission was not retained: %v", err)
+	}
+	assertBlocked(s.GetStatus().Revision - 1)
+	revision := s.GetStatus().Revision
+	s.Disconnect()
+	assertBlocked(revision)
+	release()
+	s.Disconnect()
+	waitState(t, s, "error")
+	if r.child.waits.Load() != 1 || !strings.Contains(s.GetStatus().Message, "unexpectedly") {
+		t.Fatalf("final cleanup lost exit cause or single Wait: %+v", s.GetStatus())
+	}
+	assertNoRuntime(t, s)
+}
+
 func TestWindowsJobTerminationDoesNotRequireProcessTerminateRight(t *testing.T) {
 	binary, err := os.Executable()
 	if err != nil {

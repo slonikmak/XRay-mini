@@ -12,11 +12,11 @@ function Icon({ name }: { name: IconName }) {
   };
   return <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">{paths[name]}</svg>;
 }
-function Modal({ title, children, onClose, busy }: { title: string; children: ReactNode; onClose: () => void; busy: boolean }) {
+function Modal({ title, children, onClose, busy, recovery }: { title: string; children: ReactNode; onClose: () => void; busy: boolean; recovery?: ReactNode }) {
   const ref = useRef<HTMLDialogElement>(null);
   useEffect(() => { const dialog = ref.current!; dialog.showModal(); return () => dialog.close(); }, []);
   return <dialog ref={ref} aria-labelledby="dialog-title" onCancel={e => { e.preventDefault(); if (!busy) onClose(); }}>
-    <header className="modal-header"><h2 id="dialog-title">{title}</h2><button className="icon-button" aria-label="Close dialog" disabled={busy} onClick={onClose}><Icon name="close"/></button></header>{children}
+    <header className="modal-header"><h2 id="dialog-title">{title}</h2><button className="icon-button" aria-label="Close dialog" disabled={busy} onClick={onClose}><Icon name="close"/></button></header>{recovery}{children}
   </dialog>;
 }
 const processLabels: Record<Status['processState'], string> = { stopped: 'Not running', preparing: 'Starting…', running: 'Running', stopping: 'Stopping…', error: 'Error' };
@@ -29,7 +29,9 @@ export default function App() {
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [available, setAvailable] = useState(Boolean(desktop()));
   const [busy, setBusy] = useState('');
+  const [connectionBusy, setConnectionBusy] = useState('');
   const [error, setError] = useState('');
+  const [connectionError, setConnectionError] = useState('');
   const [syncError, setSyncError] = useState('');
   const [notice, setNotice] = useState('');
   const [modal, setModal] = useState<'import' | 'delete' | 'rename' | null>(null);
@@ -46,12 +48,16 @@ export default function App() {
   const clearingSubscription = useRef<Promise<void>>(Promise.resolve());
   const alive = useRef(false);
   const lock = useRef(false);
+  const connectionLock = useRef(false);
   const revision = useRef(0);
   const pollBusy = useRef(false);
   const selected = profiles.find(p => p.id === selectedId);
-  const active = ['preparing', 'running', 'stopping'].includes(status.processState);
-  const backendUnavailable = status.state === 'Error' && !status.sessionId;
+  const active = !!status.sessionId || ['preparing', 'running', 'stopping'].includes(status.processState);
+  const backendUnavailable = status.state === 'Error' && !status.sessionId && !status.profileId;
   const transition = status.processState === 'preparing' || status.processState === 'stopping';
+  const recovery = active && status.state === 'Error';
+  const connectionDisabled = !available || !!connectionBusy || (!recovery && (status.processState === 'stopping' || (active && status.processState === 'stopped'))) || (!active && (!selected || !!syncError || backendUnavailable));
+  const connectionLabel = connectionBusy ? `${connectionBusy}…` : recovery ? 'Retry stop' : status.processState === 'stopping' ? 'Stopping…' : status.processState === 'preparing' ? 'Cancel startup' : active && status.processState === 'stopped' ? 'Finishing cleanup…' : active ? 'Disconnect' : 'Connect';
 
   const refresh = useCallback(async (force = false) => {
     const api = desktop();
@@ -74,29 +80,37 @@ export default function App() {
   }, []);
   useEffect(() => {
     alive.current = true;
-    // Subscribe before snapshot to avoid the initial read/listen race.
-    const unsubscribe = desktop()?.SubscribeStatus(next => {
-      if (!alive.current) return;
-      setStatus(previous => next.revision < previous.revision ? previous : next);
-      void refresh();
-    });
-    void refresh(true);
-    const recover = () => { void refresh(true); };
+    let listening = true;
+    let unsubscribe: (() => void) | undefined;
+    const recover = () => {
+      // A host discovered after mount needs the same listen-before-read order.
+      if (!unsubscribe) unsubscribe = desktop()?.SubscribeStatus(next => {
+        if (!listening || !alive.current) return;
+        setStatus(previous => next.revision < previous.revision ? previous : next);
+        void refresh();
+      });
+      void refresh(true);
+    };
+    recover();
     window.addEventListener('focus', recover);
     document.addEventListener('visibilitychange', recover);
-    return () => { alive.current = false; revision.current++; subscriptionGeneration.current++; const api = desktop(); clearingSubscription.current = clearingSubscription.current.then(() => api?.ClearSubscriptionPreview()).catch(() => {}); pollBusy.current = false; unsubscribe?.(); window.removeEventListener('focus', recover); document.removeEventListener('visibilitychange', recover); };
+    return () => { listening = false; alive.current = false; revision.current++; subscriptionGeneration.current++; const api = desktop(); clearingSubscription.current = clearingSubscription.current.then(() => api?.ClearSubscriptionPreview()).catch(() => {}); pollBusy.current = false; unsubscribe?.(); window.removeEventListener('focus', recover); document.removeEventListener('visibilitychange', recover); };
   }, [refresh]);
 
-  async function perform(label: string, action: () => Promise<void>) {
-    if (lock.current) return;
-    lock.current = true; setBusy(label); setError(''); setNotice('');
+  async function perform(label: string, action: () => Promise<void>, connection = false) {
+    const commandLock = connection ? connectionLock : lock;
+    const updateBusy = connection ? setConnectionBusy : setBusy;
+    if (commandLock.current) return;
+    commandLock.current = true; updateBusy(label);
+    if (connection) setConnectionError('');
+    else { setError(''); setNotice(''); }
     try { await action(); }
-    catch (e) { if (alive.current) setError(typeof e === 'string' ? e : e instanceof Error ? e.message : 'The desktop action failed. Please try again.'); }
+    catch (e) { if (alive.current) (connection ? setConnectionError : setError)(typeof e === 'string' ? e : e instanceof Error ? e.message : 'The desktop action failed. Please try again.'); }
     finally {
       // Command acceptance must release the controls before unrelated profile I/O.
       // refresh has its own generation/status-revision guards and may finish later.
-      lock.current = false;
-      if (alive.current) { setBusy(''); void refresh(true); }
+      commandLock.current = false;
+      if (alive.current) { updateBusy(''); void refresh(true); }
     }
   }
   function clearSubscription() {
@@ -150,7 +164,7 @@ export default function App() {
     await perform(active ? 'Stopping' : 'Starting', async () => {
       const next = active ? await api.Disconnect() : await api.Connect(selected!.id);
       if (alive.current) setStatus(previous => next.revision < previous.revision ? previous : next);
-    });
+    }, true);
   }
   async function copyAddress(address: string) {
     try { await navigator.clipboard.writeText(address); if (alive.current) setNotice(`Copied ${address}`); }
@@ -159,6 +173,7 @@ export default function App() {
 
   const healthy = status.processState === 'running' && status.networkHealth === 'healthy';
   const heading = !available ? 'Your connection, simplified.' : status.state === 'Error' ? 'Connection needs attention.' : healthy ? 'Proxy is ready.' : status.processState === 'running' ? 'Xray is running.' : transition ? 'One moment…' : 'Ready when you are.';
+  const modalStop = <>{active && <div><button type="button" className="secondary" aria-label={loadingSubscription ? `${connectionLabel} during loading` : undefined} disabled={connectionDisabled} onClick={() => { void toggleConnection(); }}>{connectionLabel}</button>{status.message && <p role="status">{status.message}</p>}</div>}{connectionError && <div className="alert error" role="alert">{connectionError}</div>}</>;
 
   return <div className="app-shell">
     <aside className="sidebar">
@@ -179,13 +194,14 @@ export default function App() {
       {!available && <div className="bridge-banner" role="status"><strong>Desktop bridge unavailable</strong><span>This is a browser preview. Open the Wails desktop app to import profiles and run Xray.</span></div>}
       {syncError && <div className="alert error" role="alert">{syncError}<button onClick={() => { void refresh(true); }}>Retry</button></div>}
       {error && !modal && <div className="alert error" role="alert">{error}</div>}
+      {connectionError && !modal && <div className="alert error" role="alert">{connectionError}</div>}
       {notice && <div className="alert notice" role="status">{notice}</div>}
       <section className="connection-card">
         <div className="card-top"><span className="eyebrow">LOCAL PROXY</span><span className={`status-pill ${healthy ? 'good' : ''}`}><span className="small-dot"/>{!available ? 'Desktop required' : status.state}</span></div>
         <div className={`connection-symbol ${active ? 'active' : ''}`}><Icon name="power"/></div>
         <h1>{heading}</h1>
         <p className="hero-subtitle">{selected ? <>Selected profile <strong>{selected.name}</strong></> : 'Import a profile to get started with your local proxy.'}</p>
-        <button className={`connect-button ${active ? 'disconnect' : ''}`} disabled={!available || !!busy || status.processState === 'stopping' || (!active && (!selected || !!syncError))} onClick={() => { void toggleConnection(); }}><Icon name="power"/>{busy === 'Starting' || busy === 'Stopping' ? `${busy}…` : status.processState === 'stopping' ? 'Stopping…' : status.processState === 'preparing' ? 'Cancel startup' : active ? 'Disconnect' : 'Connect'}</button>
+        <button className={`connect-button ${active ? 'disconnect' : ''}`} disabled={connectionDisabled} onClick={() => { void toggleConnection(); }}><Icon name="power"/>{connectionLabel}</button>
         <div className="state-grid"><div><span className="state-label">XRAY PROCESS</span><strong><span className={`small-dot ${status.processState === 'running' ? 'good-dot' : ''}`}/>{available ? processLabels[status.processState] : 'Unavailable'}</strong></div><div><span className="state-label">NETWORK CHECK</span><strong><span className={`small-dot ${healthy ? 'good-dot' : ''}`}/>{available ? healthLabels[status.networkHealth] : 'Not verified'}</strong></div></div>
         <p className="status-detail">{status.message || 'Process status and network reachability are checked separately.'}</p>
       </section>
@@ -204,7 +220,7 @@ export default function App() {
       {selected && <div className="profile-footer"><span>Selected: <strong>{selected.name}</strong></span><button className="secondary" disabled={!available || !!busy} onClick={() => { setName(selected.name); setError(''); setModal('rename'); }}>Rename profile</button><button className="text-danger" disabled={!available || !!busy || (active && status.profileId === selected.id)} onClick={() => { setError(''); setModal('delete'); }}><Icon name="trash"/>Delete profile</button></div>}
     </main>
 
-    {modal === 'import' && <Modal title="Import a profile" onClose={closeModal} busy={!!busy}><form onSubmit={event => { void importProfile(event); }}>
+    {modal === 'import' && <Modal title="Import a profile" onClose={closeModal} busy={!!busy} recovery={modalStop}><form onSubmit={event => { void importProfile(event); }}>
       <label htmlFor="import-kind">Import from</label><select id="import-kind" value={importKind} disabled={!!busy} onChange={e => { clearSubscription(); setSource(''); setConfig(''); setName(''); setPreview(null); setAcknowledged(false); setError(''); setImportKind(e.target.value as 'json' | 'link'); }}><option value="json">Xray JSON</option><option value="link">Subscription or VLESS link</option></select>
       {importKind === 'json' ? <><p className="modal-description">Paste a complete Xray JSON configuration. Reality and xHTTP settings are preserved; local proxy inbounds are managed by the app.</p>
       <label htmlFor="profile-name">Profile name</label><input id="profile-name" autoFocus value={name} onChange={e => setName(e.target.value)} maxLength={80} required disabled={!!busy} placeholder="My connection" autoComplete="off"/>
@@ -213,14 +229,14 @@ export default function App() {
       </> : <><p className="modal-description">Load an HTTPS subscription or one VLESS link, then choose one profile to save. Loading does not connect. The preview expires after five minutes.</p>
       <label htmlFor="subscription-source">Subscription URL or VLESS link</label><input id="subscription-source" type="password" autoFocus value={source} onChange={e => { clearSubscription(); setSource(e.target.value); setName(''); setError(''); }} maxLength={65536} disabled={!!busy} autoComplete="off" spellCheck={false} autoCapitalize="off"/>
       <div className="subscription-actions"><button type="button" className="secondary" disabled={!!busy || !source.trim()} onClick={() => { void loadSubscription(); }}>{loadingSubscription ? 'Reload profiles' : 'Load profiles'}</button>{loadingSubscription && <button type="button" className="secondary" onClick={clearSubscription}>Cancel loading</button>}</div>
-      {loadingSubscription && <><p role="status">Loading profiles…</p><button type="button" className="secondary" aria-label={status.processState === 'preparing' ? 'Cancel connection startup during loading' : active ? 'Disconnect active profile during loading' : 'Connect selected profile during loading'} disabled={!available || !!busy || status.processState === 'stopping' || (!active && (!selected || !!syncError))} onClick={() => { void toggleConnection(); }}>{status.processState === 'stopping' ? 'Stopping…' : status.processState === 'preparing' ? 'Cancel startup' : active ? 'Disconnect' : 'Connect'}</button></>}
+      {loadingSubscription && <><p role="status">Loading profiles…</p>{!active && <button type="button" className="secondary" aria-label="Connect selected profile during loading" disabled={connectionDisabled} onClick={() => { void toggleConnection(); }}>{connectionLabel}</button>}</>}
       {candidates.length > 0 && <><label htmlFor="subscription-candidate">Choose a profile</label><select id="subscription-candidate" value={candidateId} disabled={!!busy} onChange={e => { setCandidateId(e.target.value); setName(candidates.find(candidate => candidate.id === e.target.value)?.name || ''); }}><option value="">Select one of {candidates.length} profiles</option>{candidates.map(candidate => <option key={candidate.id} value={candidate.id}>{candidate.name} · {candidate.transport}</option>)}</select><label htmlFor="profile-name">Profile name</label><input id="profile-name" value={name} onChange={e => setName(e.target.value)} maxLength={80} required disabled={!!busy} autoComplete="off"/></>}
       </>}
       <p className="privacy-note"><Icon name="shield"/>Contains credentials. HTTPS sources are requested only when you load. Only the chosen profile is stored locally; pasted text is cleared on save or cancel.</p>
       {error && <div className="alert error" role="alert">{error}</div>}
       <div className="modal-actions"><button type="button" className="secondary" onClick={closeModal} disabled={!!busy}>Cancel</button><button className="primary" type="submit" disabled={!!busy || !name.trim() || (importKind === 'link' ? !candidateId || loadingSubscription : !config.trim() || (!!preview?.droppedSections.length && !acknowledged))}>{busy ? 'Checking…' : importKind === 'json' && preview?.droppedSections.length ? 'Confirm import' : 'Import profile'}</button></div>
     </form></Modal>}
-    {modal === 'rename' && selected && <Modal title="Rename profile" onClose={closeModal} busy={!!busy}><form onSubmit={e => { e.preventDefault(); const api = desktop(); if (api) void perform('Renaming', async () => { await api.RenameProfile(selected.id, name.trim()); if (alive.current) { setModal(null); setName(''); setNotice('Profile renamed.'); } }); }}><label htmlFor="rename-name">Profile name</label><input id="rename-name" autoFocus value={name} onChange={e => setName(e.target.value)} maxLength={80} disabled={!!busy} required/>{error && <div className="alert error" role="alert">{error}</div>}<div className="modal-actions"><button type="button" className="secondary" onClick={closeModal} disabled={!!busy}>Cancel</button><button className="primary" disabled={!!busy || !name.trim()}>Save name</button></div></form></Modal>}
-    {modal === 'delete' && selected && <Modal title="Delete this profile?" onClose={closeModal} busy={!!busy}><p className="modal-description">Remove <strong>{selected.name}</strong> and its saved configuration from this computer? This cannot be undone.</p>{error && <div className="alert error" role="alert">{error}</div>}<div className="modal-actions"><button className="secondary" onClick={closeModal} disabled={!!busy} autoFocus>Keep profile</button><button className="danger" disabled={!!busy} onClick={() => { const api = desktop(); if (api) void perform('Deleting', async () => { await api.DeleteProfile(selected.id); if (alive.current) { setModal(null); setNotice('Profile deleted.'); } }); }}>{busy ? 'Deleting…' : 'Delete profile'}</button></div></Modal>}
+    {modal === 'rename' && selected && <Modal title="Rename profile" onClose={closeModal} busy={!!busy} recovery={modalStop}><form onSubmit={e => { e.preventDefault(); const api = desktop(); if (api) void perform('Renaming', async () => { await api.RenameProfile(selected.id, name.trim()); if (alive.current) { setModal(null); setName(''); setNotice('Profile renamed.'); } }); }}><label htmlFor="rename-name">Profile name</label><input id="rename-name" autoFocus value={name} onChange={e => setName(e.target.value)} maxLength={80} disabled={!!busy} required/>{error && <div className="alert error" role="alert">{error}</div>}<div className="modal-actions"><button type="button" className="secondary" onClick={closeModal} disabled={!!busy}>Cancel</button><button className="primary" disabled={!!busy || !name.trim()}>Save name</button></div></form></Modal>}
+    {modal === 'delete' && selected && <Modal title="Delete this profile?" onClose={closeModal} busy={!!busy} recovery={modalStop}><p className="modal-description">Remove <strong>{selected.name}</strong> and its saved configuration from this computer? This cannot be undone.</p>{error && <div className="alert error" role="alert">{error}</div>}<div className="modal-actions"><button className="secondary" onClick={closeModal} disabled={!!busy} autoFocus>Keep profile</button><button className="danger" disabled={!!busy} onClick={() => { const api = desktop(); if (api) void perform('Deleting', async () => { await api.DeleteProfile(selected.id); if (alive.current) { setModal(null); setNotice('Profile deleted.'); } }); }}>{busy ? 'Deleting…' : 'Delete profile'}</button></div></Modal>}
   </div>;
 }
