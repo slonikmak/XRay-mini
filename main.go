@@ -20,8 +20,9 @@ func main() {
 		Mac:      application.MacOptions{ApplicationShouldTerminateAfterLastWindowClosed: true},
 	})
 	app.Window.NewWithOptions(application.WebviewWindowOptions{
-		Title: "Xray Mini", Width: 1100, Height: 760, MinWidth: 800, MinHeight: 600,
+		Title: "Xray Mini", Width: 380, Height: 640, MinWidth: 360, MinHeight: 560,
 		BackgroundColour: application.NewRGB(13, 17, 25), URL: "/",
+		Windows: application.WindowsWindow{Theme: application.Dark},
 	})
 	if err := app.Run(); err != nil {
 		log.Fatal("Unable to launch desktop window: ", err)
