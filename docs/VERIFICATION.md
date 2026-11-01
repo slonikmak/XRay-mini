@@ -4,7 +4,7 @@ Windows 11 Home amd64 10.0.26300.9711, normal user. Go 1.26.10, Wails 3.0.0; act
 
 PASS: native production Go suite and vet, frontend typecheck/23 tests, Python packaging/provenance 25 tests, production Wails build and offline complete-package check. Native real-core loopback passed all three transports through both proxies, stopped-peer no-bypass, wrong TLS leaf pin, duplicate Connect, health recovery and cleanup. Packaged GUI startup error, import, unhealthy running status, forced parent exit, persisted profile/relaunch and orphan cleanup were inspected on this host. [Windows system detail](../_bmad-output/backlog/evidence/windows-11-system.md) and [transport detail](../_bmad-output/backlog/evidence/native-windows-loopback-2026-11-01.md) distinguish their scope.
 
-**Full MVP acceptance is pending.** Windows 10, another account, missing-WebView2 isolation, external peers/egress and remaining full native GUI/stress scenarios are not passed. Native race instrumentation is unavailable without a Windows C toolchain. Existing Linux race results below remain historical Linux evidence.
+**Current scope, changed by the user on 2026-11-01:** Windows 11 x64 with WebView2 installed. Windows 10 and missing-WebView2 tests are excluded, not passed. **Full MVP acceptance is pending:** another account, external peers/egress and remaining full native GUI/stress scenarios are not passed. See [current acceptance scope](ACCEPTANCE-SCOPE.md). Native race instrumentation is unavailable without a Windows C toolchain. Existing Linux race results below remain historical Linux evidence.
 
 Repeat package check: `python scripts/package_runtime.py --verify bin`. Repeat native loopback using the exact opt-in commands in its linked evidence; ordinary tests intentionally skip that case. The test executable is a verification artifact and is moved outside the distributable bin after the run.
 
@@ -43,7 +43,7 @@ python scripts/package_runtime.py bin
 
 ## Required native Windows acceptance — pending, not passed
 
-Run on **both Windows10 and Windows11 x64**, as a normal user. Install trusted WebView2 using Microsoft's supported flow; test both available and missing runtime behavior. Do not disable system security for an unsigned binary.
+Current campaign: run on **Windows11 x64 with WebView2 installed**, as a normal user. Windows10 and missing-WebView2 cases in the original checklist were withdrawn by the user on 2026-11-01. Use Microsoft's supported WebView2 installation flow. Do not disable system security for an unsigned binary.
 
 1. `go test -v ./internal/core` on Windows: run the native Job Object harness (`TestWindowsJobKillsChildOnParentExit`) and executable-lock test. The harness checks preflight/runtime children after abrupt parent exit. Also stress parent death during child creation, cancel during preflight/start, repeated start/stop and nested-job execution.
 2. Verify application starts without elevation, actual WebView2 window renders, buttons/events/snapshot recovery work after reopening/focus; keyboard, scaling and screen-reader/visual behavior need real-device inspection.
