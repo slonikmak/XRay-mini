@@ -1,0 +1,33 @@
+{
+  "local_links_checked": 22,
+  "broken_links": [],
+  "functional_rows": [
+    "FR-01",
+    "FR-02",
+    "FR-03",
+    "FR-04",
+    "FR-05",
+    "FR-06",
+    "FR-07",
+    "FR-08",
+    "FR-09"
+  ],
+  "architecture_rows": [
+    "ADR-001",
+    "ADR-002",
+    "ADR-003",
+    "ADR-004",
+    "ADR-005",
+    "ADR-006",
+    "ADR-007",
+    "ADR-008",
+    "ADR-009",
+    "ADR-010",
+    "ADR-011",
+    "ADR-012"
+  ],
+  "root_spec_sha256": "261d26ee0a1b57139a6ae1d02711338bb9feb55abee69287ac0436ab8e07df5e",
+  "head": "910c353955f02b071fb545b0512b7585cca85189",
+  "root_agents_written": false,
+  "software_tests_run": false
+}

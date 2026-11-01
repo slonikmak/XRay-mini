@@ -1,0 +1,298 @@
+{
+  "store": "repo",
+  "folder": "backlog",
+  "tickets": [
+    {
+      "epic": "backlog",
+      "id": 1,
+      "file": "bug-runtime-cleanup-blocks-reconnect.md",
+      "type": "bug",
+      "tracker_id": "",
+      "title": "Повторный Connect разрешён после неудачного удаления runtime",
+      "status": "",
+      "tracker_status": "",
+      "state": "backlog",
+      "assignee": "",
+      "hitl": false,
+      "risk": "high",
+      "covers": [],
+      "estimate": "",
+      "refine": true,
+      "refined": false,
+      "blocked_at": "",
+      "blocked_reason": "",
+      "ref": "1",
+      "after": [],
+      "blocks": [
+        2
+      ]
+    },
+    {
+      "epic": "backlog",
+      "id": 2,
+      "file": "bug-shutdown-blocked-by-callback.md",
+      "type": "bug",
+      "tracker_id": "",
+      "title": "Закрытие приложения зависит от возврата callback уведомлений",
+      "status": "",
+      "tracker_status": "",
+      "state": "backlog",
+      "assignee": "",
+      "hitl": false,
+      "risk": "medium",
+      "covers": [],
+      "estimate": "",
+      "refine": true,
+      "refined": false,
+      "blocked_at": "",
+      "blocked_reason": "",
+      "ref": "2",
+      "after": [
+        1
+      ],
+      "blocks": [
+        3
+      ]
+    },
+    {
+      "epic": "backlog",
+      "id": 3,
+      "file": "spike-child-termination-failure.md",
+      "type": "spike",
+      "tracker_id": "",
+      "title": "Как завершать сессию при ошибке остановки дочернего процесса",
+      "status": "",
+      "tracker_status": "",
+      "state": "backlog",
+      "assignee": "",
+      "hitl": false,
+      "risk": "high",
+      "covers": [],
+      "estimate": "",
+      "refine": true,
+      "refined": false,
+      "blocked_at": "",
+      "blocked_reason": "",
+      "ref": "3",
+      "after": [
+        2
+      ],
+      "blocks": [
+        6
+      ]
+    },
+    {
+      "epic": "backlog",
+      "id": 4,
+      "file": "story-package-completeness.md",
+      "type": "story",
+      "tracker_id": "",
+      "title": "Комплектность поставки проверяется до передачи пользователю",
+      "status": "",
+      "tracker_status": "",
+      "state": "backlog",
+      "assignee": "",
+      "hitl": false,
+      "risk": "medium",
+      "covers": [],
+      "estimate": "",
+      "refine": true,
+      "refined": false,
+      "blocked_at": "",
+      "blocked_reason": "",
+      "ref": "4",
+      "after": [],
+      "blocks": [
+        7,
+        8
+      ]
+    },
+    {
+      "epic": "backlog",
+      "id": 5,
+      "file": "story-run-evidence-provenance.md",
+      "type": "story",
+      "tracker_id": "",
+      "title": "Результаты прогонов указывают ревизию приложения и среду",
+      "status": "",
+      "tracker_status": "",
+      "state": "backlog",
+      "assignee": "",
+      "hitl": false,
+      "risk": "medium",
+      "covers": [],
+      "estimate": "",
+      "refine": true,
+      "refined": false,
+      "blocked_at": "",
+      "blocked_reason": "",
+      "ref": "5",
+      "after": [],
+      "blocks": [
+        7,
+        8
+      ]
+    },
+    {
+      "epic": "backlog",
+      "id": 6,
+      "file": "spike-startup-and-log-diagnostics.md",
+      "type": "spike",
+      "tracker_id": "",
+      "title": "Какие ограничения startup и log diagnostics требуют изменения",
+      "status": "",
+      "tracker_status": "",
+      "state": "backlog",
+      "assignee": "",
+      "hitl": true,
+      "risk": "medium",
+      "covers": [],
+      "estimate": "",
+      "refine": true,
+      "refined": false,
+      "blocked_at": "",
+      "blocked_reason": "",
+      "ref": "6",
+      "after": [
+        3
+      ],
+      "blocks": [
+        7,
+        8
+      ],
+      "unknown": "доступ к безопасной native Windows-среде должен быть подтверждён перед стартом; персональные профили не нужны."
+    },
+    {
+      "epic": "backlog",
+      "id": 7,
+      "file": "story-windows-10-system-acceptance.md",
+      "type": "story",
+      "tracker_id": "",
+      "title": "Подтверждена системная приёмка Windows 10 x64",
+      "status": "",
+      "tracker_status": "",
+      "state": "backlog",
+      "assignee": "",
+      "hitl": true,
+      "risk": "high",
+      "covers": [],
+      "estimate": "",
+      "refine": true,
+      "refined": false,
+      "blocked_at": "",
+      "blocked_reason": "",
+      "ref": "7",
+      "after": [
+        4,
+        5,
+        6
+      ],
+      "blocks": [
+        9
+      ],
+      "unknown": "доступ к Windows 10 x64, изолированным WebView2-вариантам и второй учётной записи должен быть подтверждён перед стартом."
+    },
+    {
+      "epic": "backlog",
+      "id": 8,
+      "file": "story-windows-11-system-acceptance.md",
+      "type": "story",
+      "tracker_id": "",
+      "title": "Подтверждена системная приёмка Windows 11 x64",
+      "status": "",
+      "tracker_status": "",
+      "state": "backlog",
+      "assignee": "",
+      "hitl": true,
+      "risk": "high",
+      "covers": [],
+      "estimate": "",
+      "refine": true,
+      "refined": false,
+      "blocked_at": "",
+      "blocked_reason": "",
+      "ref": "8",
+      "after": [
+        4,
+        5,
+        6
+      ],
+      "blocks": [
+        10
+      ],
+      "unknown": "доступ к Windows 11 x64, изолированным WebView2-вариантам и второй учётной записи подтверждается до старта."
+    },
+    {
+      "epic": "backlog",
+      "id": 9,
+      "file": "story-windows-10-transport-acceptance.md",
+      "type": "story",
+      "tracker_id": "",
+      "title": "Три транспорта подтверждены через оба proxy на Windows 10",
+      "status": "",
+      "tracker_status": "",
+      "state": "backlog",
+      "assignee": "",
+      "hitl": true,
+      "risk": "high",
+      "covers": [],
+      "estimate": "",
+      "refine": true,
+      "refined": false,
+      "blocked_at": "",
+      "blocked_reason": "",
+      "ref": "9",
+      "after": [
+        7
+      ],
+      "blocks": [
+        10
+      ],
+      "unknown": "разрешённые серверы, synthetic profiles и контроль upstream/egress должны быть доступны до старта; сейчас их наличие не предполагается."
+    },
+    {
+      "epic": "backlog",
+      "id": 10,
+      "file": "story-windows-11-transport-acceptance.md",
+      "type": "story",
+      "tracker_id": "",
+      "title": "Три транспорта подтверждены через оба proxy на Windows 11",
+      "status": "",
+      "tracker_status": "",
+      "state": "backlog",
+      "assignee": "",
+      "hitl": true,
+      "risk": "high",
+      "covers": [],
+      "estimate": "",
+      "refine": true,
+      "refined": false,
+      "blocked_at": "",
+      "blocked_reason": "",
+      "ref": "10",
+      "after": [
+        8,
+        9
+      ],
+      "blocks": [],
+      "unknown": "Windows 11 environment, разрешённые test profiles и серверный контроль подтверждаются до старта."
+    }
+  ],
+  "counts": {
+    "total": 10,
+    "backlog": 10
+  },
+  "longest_remaining_chain": [
+    "backlog/1",
+    "backlog/2",
+    "backlog/3",
+    "backlog/6",
+    "backlog/7",
+    "backlog/9",
+    "backlog/10"
+  ],
+  "unpinned_after": [],
+  "undeclared_after": [],
+  "order_conflict": [],
+  "next_id": 11
+}

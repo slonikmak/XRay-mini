@@ -1,0 +1,20 @@
+{
+  "head": "910c353955f02b071fb545b0512b7585cca85189",
+  "preserved_bindings": {
+    "frontend/bindings/events/index.ts": "146d36b955a5411b578ac6a9beca4ba931c94700119dc769cbe8974ac69a0b65",
+    "frontend/bindings/github.com/slonikmak/XRay-mini/app.ts": "5db938f0c36f80cddcd083d7923069abb94e5f63f3998f186036c3a8bd69a727",
+    "frontend/bindings/github.com/slonikmak/XRay-mini/index.ts": "242243a6c566d4677a7e627f6006632bbc0ce76493fe86419cfb95a10d7fe78a",
+    "frontend/bindings/github.com/slonikmak/XRay-mini/internal/core/index.ts": "3a80ff863f7700207d3c02a59cfdbcded30b36f5f4b11f432e2be58d965258b7",
+    "frontend/bindings/github.com/slonikmak/XRay-mini/internal/core/models.ts": "16f22a4f0d6bf49e3b67a221e2638cec0bec3fe9183e4005a3cfe0fb404f9dd5",
+    "frontend/bindings/github.com/wailsapp/wails/v3/internal/eventcreate.ts": "6eaeafcf797a1670e8ae925e7d125ef4eff930171874462e37e767b1c52cf7ed",
+    "frontend/bindings/github.com/wailsapp/wails/v3/internal/eventdata.d.ts": "9b5ec21bf3cacb7a9d976b7fb3aab2bd3e5f017e3e5078ce608c4569f20d047b"
+  },
+  "authorization": "User approved the plan and autonomous execution on 2026-11-01; preserve pre-existing dirty files.",
+  "environment": {
+    "os": "Windows 11 Home",
+    "version": "10.0.26300",
+    "arch": "amd64",
+    "go": "go1.26.10",
+    "wails": "3.0.0"
+  }
+}

@@ -1,0 +1,90 @@
+[
+  {
+    "ref": 1,
+    "claim": "Import selects exactly one VLESS with streamSettings and rebuilds runtime sections. internal/core/config.go:29-146 (selectOutbound) @ 910c353"
+  },
+  {
+    "ref": 2,
+    "claim": "Windows profile records use current-user DPAPI. internal/core/protect_windows.go:22-43 (crypt) @ 910c353"
+  },
+  {
+    "ref": 3,
+    "claim": "Exclusive store ownership precedes orphan runtime cleanup. internal/core/store.go:32-62 (newStore) @ 910c353"
+  },
+  {
+    "ref": 4,
+    "claim": "The manager loop owns status and publishes atomic snapshots. internal/core/service.go:187-228 (loop) @ 910c353"
+  },
+  {
+    "ref": 5,
+    "claim": "Matching StopCompleted releases active; old-session events and duplicate Connect are rejected. internal/core/service.go:234-318 (loop) @ 910c353"
+  },
+  {
+    "ref": 6,
+    "claim": "Runtime removal failure still emits StopCompleted and releases active, allowing later Connect. internal/core/service.go:343-354 (run) @ 910c353; internal/core/service.go:290-302 (loop) @ 910c353"
+  },
+  {
+    "ref": 7,
+    "claim": "A callback that never returns may hold Close indefinitely. internal/core/service.go:86-95 (publishLoop) @ 910c353; internal/core/service.go:174-184 (Close) @ 910c353"
+  },
+  {
+    "ref": 8,
+    "claim": "Each production invocation locks and validates the adjacent pinned Windows runtime before child creation. internal/core/process.go:35-46 (startVerifiedContained) @ 910c353"
+  },
+  {
+    "ref": 9,
+    "claim": "Preflight and live children use atomic kill-on-close Job Object assignment and restricted handle inheritance. internal/core/process_windows.go:102-208 (startContained) @ 910c353"
+  },
+  {
+    "ref": 10,
+    "claim": "Windows Wait is once-only with infinite OS wait; cancellation ignores Kill errors. internal/core/process_windows.go:74-95 (Wait) @ 910c353; internal/core/service.go:458-461 (run) @ 910c353"
+  },
+  {
+    "ref": 11,
+    "claim": "Packaging verifies pinned archive/executable hashes and writes notices after executable replacement. scripts/package_runtime.py:19-36 (main) @ 910c353"
+  },
+  {
+    "ref": 12,
+    "claim": "Health uses serial five-second HTTPS204 probes through HTTP proxy, immediately then every30seconds. internal/core/process.go:106-120 (probeNetwork) @ 910c353; internal/core/service.go:428-455 (run) @ 910c353"
+  },
+  {
+    "ref": 13,
+    "claim": "First failed probe preserves current state but marks unhealthy; two failures degrade, success resets. internal/core/service.go:319-335 (loop) @ 910c353"
+  },
+  {
+    "ref": 14,
+    "claim": "Child text is discarded into presence flags and only newest200 logs are kept. internal/core/process.go:49-87 (outputDrain) @ 910c353; internal/core/service.go:198-227 (loop) @ 910c353"
+  },
+  {
+    "ref": 15,
+    "claim": "UI subscribes before snapshot, rejects older revisions and resyncs focus/visibility. frontend/src/App.tsx:48-75 (refresh) @ 910c353"
+  },
+  {
+    "ref": 16,
+    "claim": "Connect acknowledges acceptance without waiting for preparation/process/network I/O; UI releases action lock before unawaited refresh. internal/core/service.go:234-282 (loop) @ 910c353; frontend/src/App.tsx:77-88 (perform) @ 910c353"
+  },
+  {
+    "ref": 17,
+    "claim": "If bridge remains callable after startup failure, failed ListProfiles prevents applying fallback status. app.go:21-96 (ServiceStartup) @ 910c353; frontend/src/App.tsx:48-60 (refresh) @ 910c353"
+  },
+  {
+    "ref": 18,
+    "claim": "Frontend defines20 mock/jsdom tests:16 App and4 bridge, not native execution evidence. frontend/src/App.test.tsx:23-198 (describe) @ 910c353; frontend/src/bridge.test.ts:11-46 (describe) @ 910c353"
+  },
+  {
+    "ref": 19,
+    "claim": "Linux integration calls real PrepareConfig then substitutes ephemeral ports, bypassing Windows supervisor. integration/transports.py:119-165 (main) @ 910c353; integration/prepareconfig/main.go:11-21 (main) @ 910c353"
+  },
+  {
+    "ref": 20,
+    "claim": "Saved Linux report records12PASS and cleanup true but no app source commit or Windows result. integration/results-linux-amd64.json:2-71 (engine) @ 910c353"
+  },
+  {
+    "ref": 21,
+    "claim": "Diagnostic-only updates do not publish status; UI receives logs on later refresh triggers. internal/core/service.go:308-316 (loop) @ 910c353; frontend/src/App.tsx:48-75 (App) @ 910c353"
+  },
+  {
+    "ref": 22,
+    "claim": "UI shows controls, separate health/process, pinned version, check time and newest100 logs, gated on native host. frontend/src/App.tsx:119-176 (App) @ 910c353; frontend/src/bridge.ts:41-44 (desktop) @ 910c353"
+  }
+]
