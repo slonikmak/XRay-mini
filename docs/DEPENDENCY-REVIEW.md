@@ -4,7 +4,17 @@
 
 The retained build log for the 1 November 2026 recovery change reported `3 vulnerabilities (1 moderate, 2 critical)`. It did not identify the advisory paths or establish whether the shipped renderer was affected. The log is [here](../_bmad-output/backlog/evidence/concurrency-recovery-2026-11-01-build.log).
 
-Do not infer either "two exploitable vulnerabilities in the EXE" or "only harmless development packages" from that line. No dependency upgrade or waiver is included in this portfolio-packaging change. Direct registry access was unavailable in the authoring environment, so there is no claimed fresh npm result.
+Do not infer either "two exploitable vulnerabilities in the EXE" or "only harmless development packages" from that line. No dependency upgrade or waiver is included in this portfolio-packaging change. Direct registry access was unavailable in the authoring environment; the first hosted CI run subsequently obtained the concrete reports below.
+
+## First hosted result — 1 November 2026
+
+CI run `41357353610`, source commit `5014da4937eba936e20277778c4a798efc5c37d2`, obtained a full-tree result of **two critical and one moderate affected dependency nodes**. The separate production-only report has zero findings. These counts are package-level entries, not three independently exploitable flaws in the application.
+
+The affected path is the development test toolchain: `vitest` inherits critical findings from `tinypool`; `@vitest/mocker` contributes moderate findings. The report references Tinypool [GHSA-5gmw-xhrv-c9v3](https://github.com/advisories/GHSA-5gmw-xhrv-c9v3) and [GHSA-85c8-ppgw-ccpr](https://github.com/advisories/GHSA-85c8-ppgw-ccpr), plus mocker [GHSA-82fw-gwwq-j7x9](https://github.com/advisories/GHSA-82fw-gwwq-j7x9) and [GHSA-qxg6-89mg-rqv8](https://github.com/advisories/GHSA-qxg6-89mg-rqv8). No exploit or reachability test was performed here.
+
+npm suggests a **SemVer-major Vitest upgrade**, not a verified drop-in change. Production-only success narrows the dependency scope; it does not justify disabling the full-tree gate or declaring the build environment safe. The draft-release gate remains blocked until a reviewed upgrade passes tests, build and both audits.
+
+The exact full/prod reports and lockfile identity are retained in [dependency-audit-5014da4.json](evidence/dependency-audit-5014da4.json). Hosted Go race/vet, frontend and Python checks have passed for that source; Windows packaging is a separate job and its status must be read from Actions.
 
 ## Repeatable audit
 
