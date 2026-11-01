@@ -102,6 +102,7 @@ describe('desktop UI', () => {
     vi.mocked(api.GetStatus).mockResolvedValue({ ...initialStatus, state: 'Error', processState: 'error', message });
     render(<App/>);
     await screen.findByText(message);
+    expect(screen.getByRole('heading', { name: 'Connection needs attention.' })).toBeTruthy();
     expect((screen.getByRole('button', { name: 'Import profile' }) as HTMLButtonElement).disabled).toBe(true);
     expect(screen.queryByText('Desktop bridge unavailable')).toBeNull();
   });

@@ -237,6 +237,9 @@ func lockExecutable(path string) (func(), error) {
 	}
 	handle, err := syscall.CreateFile(name, syscall.GENERIC_READ, syscall.FILE_SHARE_READ, nil, syscall.OPEN_EXISTING, 0, 0)
 	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, errBundledRuntimeMissing
+		}
 		return nil, errors.New("cannot lock bundled Xray for verified execution")
 	}
 	return func() { syscall.CloseHandle(handle) }, nil

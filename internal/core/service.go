@@ -493,6 +493,9 @@ func (s *Service) run(run *session) {
 	}
 	if e != nil {
 		failure = "Trusted Xray preflight failed: check bundled runtime integrity and profile"
+		if errors.Is(e, errBundledRuntimeMissing) {
+			failure = "Bundled Xray runtime is missing beside this app. Start bin/XrayMini.exe or use wails3 task dev; go run . is not supported."
+		}
 		return
 	}
 	s.event(run, "ConfigValidated", "", false)

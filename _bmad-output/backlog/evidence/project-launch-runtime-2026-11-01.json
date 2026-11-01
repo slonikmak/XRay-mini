@@ -1,0 +1,119 @@
+{
+  "schema_version": 1,
+  "started_at_utc": "2026-11-01T16:55:11.525254+00:00",
+  "finished_at_utc": "2026-11-01T16:55:12.454099+00:00",
+  "command": [
+    "project_launch_verification_snapshot"
+  ],
+  "scope": "windows11-project-launch-runtime",
+  "app": {
+    "status": "available",
+    "revision": "eb31b6c1dba589038c39afbc82f5994cbc87d587",
+    "dirty": true
+  },
+  "environment": {
+    "system": "Windows",
+    "release": "11",
+    "version": "10.0.26300",
+    "machine": "AMD64"
+  },
+  "tools": {
+    "python": {
+      "status": "available",
+      "version": "3.12.10"
+    },
+    "go": {
+      "status": "available",
+      "version": "1.26.10"
+    },
+    "wails": {
+      "status": "available",
+      "version": "3.0.0"
+    },
+    "webview2": {
+      "status": "available",
+      "version": "156.0.4314.58"
+    }
+  },
+  "artifacts": {
+    "production_gui": {
+      "status": "available",
+      "sha256": "d523ab4cb7d0b5726e8027ea95bc1c837b65e676a966ada06f33fb315f9ce836"
+    },
+    "development_gui": {
+      "status": "available",
+      "sha256": "41cb0bd54e1758571c5bf312ded37f2b13a5a1ac37ed8e3919155a55334d1f39"
+    },
+    "runtime": {
+      "status": "available",
+      "sha256": "07a332b714a3c0eee047a22a9c0ea749b64df33e4e1ff6d28a8c7f9ef943ce10"
+    }
+  },
+  "tests": [
+    {
+      "scenario": "original-go-run-path-has-no-adjacent-runtime",
+      "outcome": "PASS"
+    },
+    {
+      "scenario": "new-go-run-missing-runtime-message-and-error-heading",
+      "outcome": "PASS"
+    },
+    {
+      "scenario": "workspace-task-targets-wails-dev",
+      "outcome": "PASS"
+    },
+    {
+      "scenario": "wails-dev-actually-launches-bin-executable-with-runtime",
+      "outcome": "PASS"
+    },
+    {
+      "scenario": "real-dev-connect-reaches-connected",
+      "outcome": "PASS"
+    },
+    {
+      "scenario": "real-http-https-204-0.173s",
+      "outcome": "PASS"
+    },
+    {
+      "scenario": "real-socks5-https-204-0.204s",
+      "outcome": "PASS"
+    },
+    {
+      "scenario": "production-go-tests-and-vet",
+      "outcome": "PASS"
+    },
+    {
+      "scenario": "frontend-typecheck-30-tests",
+      "outcome": "PASS"
+    },
+    {
+      "scenario": "production-build-and-preserved-package-verifier",
+      "outcome": "PASS"
+    }
+  ],
+  "result": "PASS",
+  "failure_category": null,
+  "cleanup": {
+    "status": "PASS",
+    "checks": {
+      "negative_go_run_window_closed": true,
+      "temporary_package_check_removed": true,
+      "active_user_connection_handed_off": true
+    }
+  },
+  "record_kind": "post_execution_snapshot",
+  "active_resources": {
+    "user_development_window_left_running": true,
+    "connected_xray_left_running": true
+  },
+  "source_sha256": {
+    ".zed/tasks.json": "c029d07e9a5a07166522a07f04d2a3fd2b598b64870fda41f5427810ce817d03",
+    "internal/core/runtime.go": "a147e8e5300f1d81d4124785ecfd5b16f4960dc5c39d9c293cbfc512ee9a3763",
+    "internal/core/process_windows.go": "bc13b53b55068f92e43bd4fc92c450015a9a3da67d069345ff28caf78c8ea498",
+    "internal/core/service.go": "ad86e6c5d6940ed89504677435d94e44ff8071d58dcb4fedd2fb632657d9160d",
+    "frontend/src/App.tsx": "9857f63134147406aeda3150d12ba7097ccf9a1b4357769fc17f7891096e8a18",
+    "internal/core/service_test.go": "a42b7206fbce5ce4c05a174cfc6247ebc2ec992e13652e0067d3f6efa317f85d",
+    "internal/core/process_windows_test.go": "dbd550d73de5df672eaa2e9b70642e94cdd628dac870b8db3282fa3800cf051c",
+    "frontend/src/App.test.tsx": "da1cc1278e57a93ddd33cac5981fdd2defa5f23580f90a2197b6710949b892b7"
+  }
+}

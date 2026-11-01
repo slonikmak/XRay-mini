@@ -1,5 +1,7 @@
 # Saved-profile preflight recheck — 2026-11-01
 
+Later investigation confirmed a separate failing launch through go run without adjacent runtime; see [root cause and launch fix](project-launch-runtime-2026-11-01.md). The earlier checks below only covered the packaged executable.
+
 User reported the generic Trusted Xray preflight failure after re-import. The original failure was not reproduced; no cause or code fix is claimed.
 
 Current committed source: `95b13846a33064b98d09c1a0d866196b7d676d55`, pre-existing unrelated dirty bindings preserved. Production GUI SHA256 `8dd510de3d9c6f451fdde08caf7623ac89b2ce45dc5b39af1563ea22fedc1ad7`; pinned Xray 26.10.29 SHA256 `07a332b714a3c0eee047a22a9c0ea749b64df33e4e1ff6d28a8c7f9ef943ce10`. Windows 11, same user. Package verifier passed.

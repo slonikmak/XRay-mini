@@ -1,0 +1,10 @@
+[
+  {
+    "label": "Run Xray Mini (Wails)",
+    "command": "wails3",
+    "args": ["task", "dev"],
+    "cwd": "$ZED_WORKTREE_ROOT",
+    "tags": ["go-main"],
+    "allow_concurrent_runs": false
+  }
+]

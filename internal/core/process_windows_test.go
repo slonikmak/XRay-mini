@@ -17,6 +17,19 @@ import (
 	"time"
 )
 
+func TestWindowsMissingRuntimeIsClassifiedBeforeChildCreation(t *testing.T) {
+	for _, relative := range []string{"xray.exe", filepath.Join("runtime", "xray.exe")} {
+		path := filepath.Join(t.TempDir(), "private-location", relative)
+		child, err := startVerifiedContained(context.Background(), path, []string{"run", "-test"})
+		if child != nil || !errors.Is(err, errBundledRuntimeMissing) {
+			t.Fatalf("missing runtime did not produce a safe category: %v", err)
+		}
+		if strings.Contains(err.Error(), "private-location") {
+			t.Fatal("runtime error exposed its path")
+		}
+	}
+}
+
 // Run on a real Windows 10/11 host. The intermediate parent intentionally exits
 // without Wait, Kill, context cancellation or any defer-based cleanup.
 func TestWindowsJobKillsChildOnParentExit(t *testing.T) {

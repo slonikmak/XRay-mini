@@ -153,6 +153,23 @@ func TestPreflightErrorsNeverExposeCoreDiagnostics(t *testing.T) {
 	}
 	assertNoRuntime(t, s)
 }
+
+func TestMissingRuntimeExplainsSupportedLaunchWithoutStartingChild(t *testing.T) {
+	s, p, _, r := fixture(t)
+	r.preflight = func(context.Context, string) error {
+		return errors.Join(errBundledRuntimeMissing, errors.New("secret-private-location"))
+	}
+	_, _ = s.Connect(p.ID)
+	waitState(t, s, "error")
+	message := s.GetStatus().Message
+	if !strings.Contains(message, "runtime is missing") || !strings.Contains(message, "wails3 task dev") || strings.Contains(message, "secret") {
+		t.Fatalf("missing runtime cause lost or unsafe: %q", message)
+	}
+	if r.starts.Load() != 0 {
+		t.Fatal("missing runtime admitted a working child")
+	}
+	assertNoRuntime(t, s)
+}
 func TestUnexpectedExitIsNotHealthy(t *testing.T) {
 	s, p, _, r := fixture(t)
 	probeEntered := make(chan struct{})

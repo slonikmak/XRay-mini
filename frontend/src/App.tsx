@@ -158,7 +158,7 @@ export default function App() {
   }
 
   const healthy = status.processState === 'running' && status.networkHealth === 'healthy';
-  const heading = !available ? 'Your connection, simplified.' : healthy ? 'Proxy is ready.' : status.processState === 'running' ? 'Xray is running.' : transition ? 'One moment…' : 'Ready when you are.';
+  const heading = !available ? 'Your connection, simplified.' : status.state === 'Error' ? 'Connection needs attention.' : healthy ? 'Proxy is ready.' : status.processState === 'running' ? 'Xray is running.' : transition ? 'One moment…' : 'Ready when you are.';
 
   return <div className="app-shell">
     <aside className="sidebar">

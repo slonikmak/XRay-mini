@@ -1,6 +1,6 @@
 # Xray Mini · Windows local proxy
 
-Go **1.26.10**, Wails **3.0.0**, React/TypeScript. Windows 10/11 **x64** only. This is a local SOCKS5/HTTP proxy, **not a system VPN**: no TUN, system proxy changes, kill switch, auto-update or administrator privileges.
+Go **1.26.10**, Wails **3.0.0**, React/TypeScript. Windows 11 **x64** only. This is a local SOCKS5/HTTP proxy, **not a system VPN**: no TUN, system proxy changes, kill switch, auto-update or administrator privileges.
 
 ## Build and package
 
@@ -21,6 +21,11 @@ it does not execute the GUI or runtime. Runtime installation alone reports only
 runtime readiness. `wails3 task package` finishes with the complete-package check.
 
 For development, the same `runtime/` directory must be beside the executable Wails actually launches. Do not replace the pin with an arbitrary local binary. The displayed version describes the pinned package, not a claim that a missing executable is installed.
+
+Run the packaged app with `.\bin\XrayMini.exe`. For development use
+`wails3 task dev`, which builds and runs the app in `bin/`. The workspace Zed
+Go main runnable uses this task. Plain `go run .` creates a temporary executable
+without the adjacent runtime and cannot connect; do not use it to launch the app.
 
 ## Use
 

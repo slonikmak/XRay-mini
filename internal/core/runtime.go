@@ -16,6 +16,8 @@ const XrayExecutableSHA256 = "07a332b714a3c0eee047a22a9c0ea749b64df33e4e1ff6d28a
 const XrayArchiveSHA256 = "fce33e81cccf50e7aab572b175519a50b5e0f9d2f5c8d1ed73012ea5c9ad4d58"
 const XrayReleaseURL = "https://github.com/XTLS/Xray-core/releases/tag/v26.10.29"
 
+var errBundledRuntimeMissing = errors.New("bundled Xray runtime is missing")
+
 func bundledRuntimePath() string {
 	executable, err := os.Executable()
 	if err != nil {
@@ -40,6 +42,9 @@ func validateBinary(path string) error {
 
 func verifyExecutableDigest(path, expected string) error {
 	info, err := os.Lstat(path)
+	if os.IsNotExist(err) {
+		return errBundledRuntimeMissing
+	}
 	if err != nil || !info.Mode().IsRegular() {
 		return errors.New("bundled Xray executable is missing or is not a regular file")
 	}
