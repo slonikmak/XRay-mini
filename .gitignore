@@ -11,3 +11,4 @@
 *.syso
 .task/
 __pycache__/
+/_bmad/render/
