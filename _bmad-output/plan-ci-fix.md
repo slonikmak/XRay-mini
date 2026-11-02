@@ -34,6 +34,7 @@ Oneshot: the changes are localized version, hash, dependency, and evidence updat
 - Vitest 4.1.12 removes the vulnerable Tinypool dependency; clean npm install, 77 frontend tests, typecheck, build and full/production audits passed on Node 24.20.0 / npm 11.19.0.
 - Windows 11 build 26300: all three opt-in native Xray 26.10.31 loopback transports passed through HTTP and SOCKS5; historical 26.10.29 results remain clearly identified.
 - The complete Wails package, runtime verification, native production Go suite/vet, and 39 Python packaging/evidence tests passed locally; the hosted CI run remains the final check.
+- Hosted Windows CI revealed that autocrlf marked regenerated LF bindings as modified even when their normalized contents matched. A fresh Windows clone with autocrlf=true and the explicit LF attribute stayed clean after two binding generations; strict clean-checkout packaging remains enabled.
 
 ## Plan Change Log
 

@@ -1,5 +1,6 @@
 # Classify third-party tooling and generated bindings, not our application code.
 _bmad/** linguist-vendored
 .agents/** linguist-vendored
-frontend/bindings/** linguist-generated
+# Wails emits LF; keep the generated checkout stable on Windows.
+frontend/bindings/** text eol=lf linguist-generated
 _bmad-output/** linguist-documentation

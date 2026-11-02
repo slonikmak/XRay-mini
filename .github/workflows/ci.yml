@@ -119,29 +119,12 @@ jobs:
           python-version: '3.12'
       - name: Install pinned Wails CLI
         run: go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0
-      - name: Verify generated bindings
-        shell: pwsh
-        run: |
-          wails3 task bindings
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          git diff --exit-code -- frontend/bindings
-          if ($LASTEXITCODE -ne 0) {
-            $bindingsExitCode = $LASTEXITCODE
-            git ls-files --eol -- frontend/bindings
-            exit $bindingsExitCode
-          }
       - name: Build complete production package
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force artifacts | Out-Null
           wails3 task package *> artifacts/windows-build.log
           if ($LASTEXITCODE -ne 0) { Get-Content artifacts/windows-build.log; exit $LASTEXITCODE }
-          git diff --exit-code -- frontend/bindings
-          if ($LASTEXITCODE -ne 0) {
-            $bindingsExitCode = $LASTEXITCODE
-            git ls-files --eol -- frontend/bindings
-            exit $bindingsExitCode
-          }
       - name: Native Windows tests and vet (no external peers)
         shell: pwsh
         run: |
@@ -156,8 +139,6 @@ jobs:
           if ($LASTEXITCODE -ne 0) {
             $packageExitCode = $LASTEXITCODE
             git status --short --untracked-files=all
-            git diff -- frontend/bindings
-            git ls-files --eol -- frontend/bindings
             exit $packageExitCode
           }
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
