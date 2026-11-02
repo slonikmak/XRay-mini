@@ -27,6 +27,7 @@
   --danger: #c89494;
 }
 * { box-sizing: border-box; }
+html, body, #root { height: 100%; overflow: hidden; }
 body { margin: 0; min-width: 0; }
 button, input, textarea, select { font: inherit; }
 button { cursor: pointer; color: inherit; }
@@ -36,9 +37,9 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 button:hover:not(:disabled) { filter: brightness(1.12); }
 svg { width: 18px; height: 18px; flex-shrink: 0; }
 button svg { display: block; }
-.app-shell { min-height: 100vh; }
-main { display: flex; flex-direction: column; min-height: 100vh; width: 100%; max-width: 560px; margin: auto; padding: 16px; }
-.home-header, .screen-header { display: flex; align-items: center; gap: 10px; min-height: 28px; margin-bottom: 12px; }
+.app-shell { height: 100%; overflow: hidden; }
+main { display: flex; flex-direction: column; height: 100%; min-height: 0; width: 100%; max-width: 560px; margin: auto; padding: 16px; }
+.home-header, .screen-header { display: flex; flex-shrink: 0; align-items: center; gap: 10px; min-height: 28px; margin-bottom: 12px; }
 .home-header { justify-content: space-between; margin-bottom: 16px; }
 .screen-header h1 { font-size: 14px; font-weight: 500; margin: 0; }
 .header-count { color: var(--muted); font-size: 10px; }
@@ -53,7 +54,7 @@ main { display: flex; flex-direction: column; min-height: 100vh; width: 100%; ma
 .status-pill.good { color: var(--accent); }
 .status-pill.good .small-dot { background: var(--accent); }
 .home-screen, .profiles-screen, .diagnostics-screen { display: flex; flex-direction: column; flex: 1; min-height: 0; }
-.home-screen { gap: 16px; }
+.home-screen { gap: 16px; overflow-y: auto; overscroll-behavior: contain; }
 .profile { display: flex; align-items: center; gap: 10px; width: 100%; min-width: 0; padding: 12px; border: 0; border-radius: 10px; background: var(--card); text-align: left; }
 .profile.selected { background: var(--accent-dim); }
 .profile > svg:last-child { width: 14px; height: 14px; color: var(--dim); }
@@ -87,7 +88,8 @@ main { display: flex; flex-direction: column; min-height: 100vh; width: 100%; ma
 .state-label { margin-bottom: 8px; text-align: center; }
 .state-grid strong { display: flex; justify-content: center; align-items: center; gap: 6px; font-size: 11px; font-weight: 500; line-height: 13px; }
 .status-detail { margin: 0; color: var(--dim); font-size: 10px; line-height: 1.4; text-align: center; overflow-wrap: anywhere; }
-.detail-screen { display: flex; flex-direction: column; gap: 4px; }
+.detail-screen { display: flex; flex: 1; flex-direction: column; gap: 4px; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+.detail-screen > * { flex-shrink: 0; }
 .detail-screen > .eyebrow:not(:first-child) { margin-top: 8px; }
 .detail-screen .footer-note { margin-top: 4px; }
 .endpoints { border-radius: 10px; background: var(--card); overflow: hidden; }
@@ -115,20 +117,21 @@ main { display: flex; flex-direction: column; min-height: 100vh; width: 100%; ma
 .muted { color: var(--dim); font-size: 10px; }
 .footer-note { margin: 6px 0 0; color: var(--dim); font-size: 10px; line-height: 1.4; text-align: center; }
 .footer-note .small-dot { margin-right: 3px; }
-.profile-list { display: flex; flex-direction: column; gap: 12px; }
+.profile-list { display: flex; flex-direction: column; gap: 12px; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+.profile-list > * { flex-shrink: 0; }
 .profiles-screen .add-profile { margin-top: 12px; }
 .profiles-screen .footer-note { display: grid; place-items: center; flex: 1; min-height: 80px; margin: 12px 0 0; }
-.import-screen { display: flex; flex: 1; flex-direction: column; gap: 12px; min-height: 0; }
+.import-screen { display: flex; flex: 1; flex-direction: column; gap: 12px; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
 .import-screen > * { flex-shrink: 0; }
 .import-field { display: flex; flex-direction: column; gap: 4px; }
 .import-field label { color: var(--muted); font-size: 10px; font-weight: 500; line-height: 12px; }
-.import-config { flex: 1 1 144px; min-height: 144px; }
-.import-config textarea { flex: 1; min-height: 118px; }
+.import-config { flex: 1 1 80px; min-height: 80px; }
+.import-config textarea { flex: 1; min-height: 64px; }
 .import-screen .modal-description, .import-screen .subscription-actions, .import-screen > .alert { margin: 0; }
 .import-screen .privacy-note { margin: auto 0 0; }
 .import-screen .import-submit { width: 100%; padding: 12px; }
 .empty-message { color: var(--muted); font-size: 11px; line-height: 1.6; }
-.diagnostics-screen .log-list { flex: 1 1 0; }
+.diagnostics-screen .log-list { flex: 1 1 0; min-height: 0; }
 .log-list { min-height: 180px; max-height: calc(100vh - 96px); overflow: auto; border-radius: 10px; background: var(--card); }
 .log-list > p { padding: 12px; color: var(--muted); font-size: 11px; }
 .log-entry { display: grid; grid-template-columns: max-content 5px minmax(0, 1fr); align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--border); font: 10px/1.5 "Cascadia Code", Consolas, monospace; overflow-wrap: anywhere; }
@@ -136,6 +139,7 @@ main { display: flex; flex-direction: column; min-height: 100vh; width: 100%; ma
 .log-entry .log-message { min-width: 0; }
 .log-level.error { color: #f5aaa7; }
 .log-level.warning, .log-level.warn { color: #e2bd77; }
+.status-messages { flex: 0 1 auto; min-height: 0; max-height: 35%; overflow-y: auto; overscroll-behavior: contain; }
 .bridge-banner { display: flex; flex-direction: column; gap: 5px; margin-bottom: 12px; padding: 11px; border: 1px solid #4b4839; border-radius: 8px; background: #29281e; color: #d0c9ae; font-size: 11px; line-height: 1.5; }
 .bridge-banner strong { color: #eadcac; }
 .alert { margin: 0 0 12px; padding: 10px 12px; border-radius: 8px; font-size: 11px; line-height: 1.5; overflow-wrap: anywhere; }
@@ -151,7 +155,7 @@ dialog label { display: block; margin: 12px 0 4px; color: var(--muted); font-siz
 input, textarea, select { width: 100%; padding: 8px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--card2); color: var(--txt); font-size: 11px; }
 input::placeholder, textarea::placeholder { color: var(--dim); }
 input:disabled, textarea:disabled, select:disabled { opacity: .6; }
-textarea { min-height: 118px; resize: vertical; font-family: "Cascadia Code", Consolas, monospace; line-height: 1.6; }
+textarea { min-height: 118px; resize: none; font-family: "Cascadia Code", Consolas, monospace; line-height: 1.6; }
 .modal-description { margin: 12px 0; color: var(--dim); font-size: 10px; line-height: 1.6; }
 .privacy-note { display: flex; gap: 8px; margin: 12px 0; color: var(--dim); font-size: 10px; line-height: 1.5; }
 .privacy-note svg { width: 12px; height: 12px; }
@@ -163,7 +167,7 @@ textarea { min-height: 118px; resize: vertical; font-family: "Cascadia Code", Co
 .danger { border: 1px solid #b7646a; background: #914a50; color: #fff; }
 input[type=checkbox] { width: auto; margin: 0 9px 0 0; vertical-align: middle; accent-color: var(--accent); }
 .alert label { line-height: 1.6; }
-.session-action { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 12px; color: var(--muted); font-size: 10px; overflow-wrap: anywhere; }
+.session-action { display: flex; flex-shrink: 0; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 12px; color: var(--muted); font-size: 10px; overflow-wrap: anywhere; }
 .session-action span { min-width: 0; }
 .session-action button { flex: none; }
 .status-pill, .header-button, .profile, .endpoints, .profile-panel, .profile-actions .secondary, .text-danger, .add-profile, .settings-card, .diagnostics-link, .log-list { box-shadow: inset 0 0 0 1px var(--border); }
@@ -172,5 +176,13 @@ input[type=checkbox] { width: auto; margin: 0 9px 0 0; vertical-align: middle; a
 @media (max-width: 360px) {
   .log-entry { grid-template-columns: minmax(0, max-content) 5px minmax(0, 1fr); }
   dialog { padding: 20px; }
+}
+@media (max-height: 560px) {
+  main { padding-top: 12px; padding-bottom: 12px; }
+  .import-screen { gap: 8px; }
+  .detail-screen > .eyebrow:not(:first-child) { margin-top: 4px; }
+  .detail-screen .footer-note { margin-top: 0; }
+  .endpoint, .profile-panel .profile { padding-top: 8px; padding-bottom: 8px; }
+  .settings-card { padding-top: 4px; padding-bottom: 4px; }
 }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }

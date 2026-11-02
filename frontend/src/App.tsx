@@ -63,6 +63,8 @@ export default function App() {
   const revision = useRef(0);
   const logsRevision = useRef(0);
   const pollBusy = useRef(false);
+  const messagesRef = useRef<HTMLDivElement>(null);
+  const importFormRef = useRef<HTMLFormElement>(null);
   const selected = profiles.find(p => p.id === selectedId);
   const statusKnown = available && statusReadState === 'ready';
   const statusWaiting = available && statusReadState === 'loading';
@@ -74,6 +76,12 @@ export default function App() {
   const connectionLabel = connectionBusy ? `${connectionBusy}…` : recovery ? 'Retry stop' : status.processState === 'stopping' ? 'Stopping…' : status.processState === 'preparing' ? 'Cancel startup' : active && status.processState === 'stopped' ? 'Finishing cleanup…' : active ? 'Disconnect' : 'Connect';
 
   useEffect(() => { document.documentElement.scrollTop = 0; document.body.scrollTop = 0; }, [screen]);
+  useEffect(() => {
+    if (screen !== 'home' && status.state === 'Error' && status.message && messagesRef.current) messagesRef.current.scrollTop = 0;
+  }, [screen, status.state, status.message]);
+  useEffect(() => {
+    if (screen === 'import' && error && importFormRef.current) importFormRef.current.scrollTop = 0;
+  }, [screen, error]);
 
   const refreshLogs = useCallback(async () => {
     const version = ++logsRevision.current;
@@ -232,12 +240,14 @@ export default function App() {
     <main>
       {screen === 'home' ? <header className="home-header"><span className={`status-pill ${ready ? 'good' : ''}`}><span className="small-dot"/>{statusLabel}</span><button className="icon-button header-button" aria-label="Open details" onClick={() => setScreen('details')}><Icon name="info"/></button></header> :
       <header className="screen-header"><button className="icon-button header-button" aria-label="Back" disabled={screen === 'import' && !!busy} onClick={() => screen === 'import' ? closeImport() : setScreen(screen === 'profiles' ? profilesBack : screen === 'diagnostics' ? 'details' : 'home')}><Icon name="back"/></button><h1>{screen === 'details' ? 'Details' : screen === 'profiles' ? 'Profiles' : screen === 'import' ? 'Import a profile' : 'Diagnostics'}</h1>{screen === 'profiles' && <span className="header-count">{profiles.length}</span>}{screen === 'diagnostics' && <span className="header-count">{logCount}</span>}</header>}
-      {!available && <div className="bridge-banner" role="status"><strong>Desktop bridge unavailable</strong><span>This is a browser preview. Open the Wails desktop app to import profiles and run Xray.</span></div>}
-      {syncError && <div className="alert error" role="alert">{syncError}<button onClick={() => { void refresh(true); }}>Retry</button></div>}
-      {error && !modal && screen !== 'import' && <div className="alert error" role="alert">{error}</div>}
-      {connectionError && !modal && <div className="alert error" role="alert">{connectionError}</div>}
-      {notice && <div className="alert notice" role="status">{notice}</div>}
-      {screen !== 'home' && status.state === 'Error' && status.message && <div className="alert error" role="alert">{status.message}</div>}
+      <div className="status-messages" ref={messagesRef}>
+        {screen !== 'home' && status.state === 'Error' && status.message && <div className="alert error" role="alert">{status.message}</div>}
+        {!available && <div className="bridge-banner" role="status"><strong>Desktop bridge unavailable</strong><span>This is a browser preview. Open the Wails desktop app to import profiles and run Xray.</span></div>}
+        {syncError && <div className="alert error" role="alert">{syncError}<button onClick={() => { void refresh(true); }}>Retry</button></div>}
+        {error && !modal && screen !== 'import' && <div className="alert error" role="alert">{error}</div>}
+        {connectionError && !modal && <div className="alert error" role="alert">{connectionError}</div>}
+        {notice && <div className="alert notice" role="status">{notice}</div>}
+      </div>
       {screen !== 'home' && active && <div className="session-action"><span>Active: {activeProfile?.name || 'Profile unavailable'}</span><button className="secondary" aria-label={screen === 'import' && loadingSubscription ? `${connectionLabel} during loading` : undefined} disabled={connectionDisabled} onClick={() => { void toggleConnection(); }}>{connectionLabel}</button></div>}
       {screen === 'import' && !active && !!busy && <div className="session-action"><span>Selected: {selected?.name || 'No profile selected'}</span><button className="secondary" disabled={connectionDisabled} onClick={() => { void toggleConnection(); }}>{connectionLabel}</button></div>}
       {screen === 'home' && <div className="home-screen">
@@ -286,7 +296,8 @@ export default function App() {
         <div className="log-list" aria-label="Recent diagnostic logs">{logsUnavailable ? <p role="status">Unable to load diagnostics.</p> : logsLoading ? <p role="status">Loading diagnostics…</p> : logs.length ? logs.slice(-100).map((entry, index) => <div className="log-entry" key={`${entry.time}-${index}`}><time dateTime={entry.time} title={entry.time}>{logTime(entry.time)}</time><span role="img" aria-label={entry.level} className={`small-dot log-dot ${entry.level === 'info' && entry.message === 'HTTP proxy check passed; other destinations may differ' ? 'good-dot' : ''}`}/><span className="log-message">{entry.level !== 'info' && <span className={`log-level ${entry.level}`}>{entry.level} · </span>}{entry.message}</span></div>) : <p>No activity yet. Runtime events will appear here.</p>}</div>
         <p className="footer-note">Last 100 runtime events since app start.</p>
       </div>}
-      {screen === 'import' && <form className="import-screen" onSubmit={event => { void importProfile(event); }}>
+      {screen === 'import' && <form className="import-screen" ref={importFormRef} onSubmit={event => { void importProfile(event); }}>
+      {error && <div className="alert error" role="alert">{error}</div>}
       <div className="import-field"><label htmlFor="import-kind">Import from</label><select id="import-kind" value={importKind} disabled={!!busy} onChange={e => { clearSubscription(); setSource(''); setConfig(''); setName(''); setPreview(null); setAcknowledged(false); setError(''); setImportKind(e.target.value as 'json' | 'link'); }}><option value="json">Xray JSON</option><option value="link">Subscription or VLESS link</option></select></div>
       {importKind === 'json' ? <><p className="modal-description">Paste a complete Xray JSON configuration. Reality and xHTTP settings are preserved; local proxy inbounds are managed by the app.</p>
       <div className="import-field"><label htmlFor="profile-name">Profile name</label><input id="profile-name" autoFocus value={name} onChange={e => setName(e.target.value)} maxLength={80} required disabled={!!busy} placeholder="My connection" autoComplete="off"/></div>
@@ -299,7 +310,6 @@ export default function App() {
       {candidates.length > 0 && <><div className="import-field"><label htmlFor="subscription-candidate">Choose a profile</label><select id="subscription-candidate" value={candidateId} disabled={!!busy} onChange={e => { setCandidateId(e.target.value); setName(candidates.find(candidate => candidate.id === e.target.value)?.name || ''); }}><option value="">Select one of {candidates.length} profiles</option>{candidates.map(candidate => <option key={candidate.id} value={candidate.id}>{candidate.name} · {candidate.transport}</option>)}</select></div><div className="import-field"><label htmlFor="profile-name">Profile name</label><input id="profile-name" value={name} onChange={e => setName(e.target.value)} maxLength={80} required disabled={!!busy} autoComplete="off"/></div></>}
       </>}
       <p className="privacy-note"><Icon name="shield"/><span>Contains credentials. {importKind === 'link' && 'HTTPS sources are requested only when you load. '}Only the chosen profile is stored locally; pasted text is cleared on save or when you go back.</span></p>
-      {error && <div className="alert error" role="alert">{error}</div>}
       <button className="primary import-submit" type="submit" disabled={!!busy || !name.trim() || (importKind === 'link' ? !candidateId || loadingSubscription : !config.trim() || (!!preview?.droppedSections.length && !acknowledged))}>{busy ? 'Checking…' : importKind === 'json' && preview?.droppedSections.length ? 'Confirm import' : 'Import profile'}</button>
       </form>}
     </main>

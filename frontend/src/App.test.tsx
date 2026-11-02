@@ -645,6 +645,27 @@ describe('desktop UI', () => {
     expect((screen.getByRole('button', { name: 'Import profile' }) as HTMLButtonElement).disabled).toBe(true);
     expect(screen.queryByText('Desktop bridge unavailable')).toBeNull();
   });
+  it('keeps a new retained-session error visible above older notices', async () => {
+    let notify!: Parameters<DesktopAPI['SubscribeStatus']>[0];
+    vi.mocked(api.SubscribeStatus).mockImplementation(callback => { notify = callback; return vi.fn(); });
+    vi.mocked(api.ListProfiles).mockRejectedValue(new Error('profile read failed'));
+    const writeText = vi.fn().mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error('clipboard failed'));
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
+    render(<App/>);
+    await screen.findByText(/Unable to refresh desktop state/);
+    openDetails();
+    fireEvent.click(screen.getByRole('button', { name: 'Copy SOCKS5 address' }));
+    await screen.findByText(/Copied 127\.0\.0\.1:10808/);
+    fireEvent.click(screen.getByRole('button', { name: 'Copy HTTP address' }));
+    await screen.findByText(/Clipboard unavailable/);
+    const messages = document.querySelector('.status-messages') as HTMLElement;
+    messages.scrollTop = 100;
+    const message = 'Xray stop is not confirmed; process and storage ownership are retained';
+    act(() => notify({ ...initialStatus, revision: 1, state: 'Error', processState: 'stopping', sessionId: 'owned', profileId: profile.id, message }));
+    expect(messages.firstElementChild?.textContent).toBe(message);
+    expect(messages.scrollTop).toBe(0);
+    expect(screen.getByRole('button', { name: 'Retry stop' })).toBeTruthy();
+  });
   it('applies status without waiting for a pending profile read', async () => {
     let resolveProfiles!: (profiles: typeof profile[]) => void;
     vi.mocked(api.ListProfiles).mockReturnValue(new Promise(resolve => { resolveProfiles = resolve; }));
@@ -697,7 +718,11 @@ describe('desktop UI', () => {
     openImport();
     fireEvent.change(screen.getByLabelText('Profile name'), { target: { value: 'Test' } });
     fireEvent.change(screen.getByLabelText('Xray configuration'), { target: { value: 'vless://secret-value' } });
-    fireEvent.submit(screen.getByLabelText('Profile name').closest('form')!);
+    const form = screen.getByLabelText('Profile name').closest('form')!;
+    form.scrollTop = 100;
+    fireEvent.submit(form);
+    expect(form.firstElementChild?.getAttribute('role')).toBe('alert');
+    expect(form.scrollTop).toBe(0);
     expect(screen.getByRole('alert').textContent).not.toContain('secret-value');
     expect(api.ImportProfile).not.toHaveBeenCalled();
   });
