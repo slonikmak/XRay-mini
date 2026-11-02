@@ -18,6 +18,7 @@ import (
 type App struct {
 	service           *core.Service
 	startupError      error
+	trayStatusChanged func()
 	closing           atomic.Bool
 	previewMu         sync.Mutex
 	lifetime          context.Context
@@ -39,6 +40,7 @@ type SubscriptionCandidate struct {
 
 func NewApp() *App { return &App{} }
 func (a *App) ServiceStartup(ctx context.Context, options application.ServiceOptions) error {
+	defer a.notifyTrayStatus()
 	a.previewMu.Lock()
 	a.lifetime, a.stopLifetime = context.WithCancel(ctx)
 	a.previewMu.Unlock()
@@ -55,10 +57,16 @@ func (a *App) ServiceStartup(ctx context.Context, options application.ServiceOpt
 	}
 	a.service.SetEventCallback(func(status core.Status) {
 		if !a.closing.Load() {
+			a.notifyTrayStatus()
 			application.Get().Event.Emit("connection:state-changed", status)
 		}
 	})
 	return nil
+}
+func (a *App) notifyTrayStatus() {
+	if a.trayStatusChanged != nil {
+		a.trayStatusChanged()
+	}
 }
 func (a *App) ServiceShutdown() error {
 	a.closing.Store(true)
