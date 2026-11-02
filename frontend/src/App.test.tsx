@@ -22,7 +22,188 @@ beforeEach(() => {
   vi.mocked(desktop).mockReturnValue(api);
 });
 afterEach(() => { cleanup(); vi.mocked(desktop).mockReturnValue(undefined); vi.restoreAllMocks(); });
+function openDetails() {
+  const button = screen.queryByRole('button', { name: 'Open details' });
+  if (button) fireEvent.click(button);
+}
+function openImport() {
+  openDetails();
+  fireEvent.click(screen.getByRole('button', { name: 'Import profile' }));
+}
 describe('desktop UI', () => {
+  it('keeps the active profile until cleanup and connects the newly selected profile afterwards', async () => {
+    const other = { ...profile, id: 'local-2', name: 'Other profile' };
+    let notify!: Parameters<DesktopAPI['SubscribeStatus']>[0];
+    const running = { ...initialStatus, revision: 1, state: 'Connected', processState: 'running', networkHealth: 'healthy', sessionId: 'owned', profileId: profile.id };
+    vi.mocked(api.SubscribeStatus).mockImplementation(callback => { notify = callback; return vi.fn(); });
+    vi.mocked(api.ListProfiles).mockResolvedValue([profile, other]);
+    vi.mocked(api.GetStatus).mockResolvedValue(running);
+    vi.mocked(api.Disconnect).mockResolvedValue({ ...running, revision: 2, state: 'Disconnecting', processState: 'stopped' });
+    render(<App/>);
+    fireEvent.click(await screen.findByRole('button', { name: /My profile Active profile/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Other profile Xray configuration/ }));
+    expect(api.Connect).not.toHaveBeenCalled();
+    expect(api.Disconnect).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Back' }));
+    expect(screen.getByText('Active profile:', { exact: false }).textContent).toContain('My profile');
+    expect(screen.getByText('Selected profile', { exact: false }).textContent).toContain('Other profile');
+    fireEvent.click(screen.getByRole('button', { name: 'Disconnect' }));
+    const cleanup = await screen.findByRole('button', { name: 'Finishing cleanup…' });
+    expect((cleanup as HTMLButtonElement).disabled).toBe(true);
+    expect(api.Connect).not.toHaveBeenCalled();
+    act(() => notify({ ...initialStatus, revision: 3 }));
+    fireEvent.click(screen.getByRole('button', { name: 'Connect' }));
+    expect(api.Connect).toHaveBeenCalledWith(other.id);
+  });
+
+  it('navigates details, addresses, diagnostics, profiles and import with a way back', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
+    vi.mocked(api.GetStatus).mockResolvedValue({ ...initialStatus, xrayVersion: 'pinned' });
+    vi.mocked(api.GetRecentLogs).mockResolvedValue([{ time: '12:00', level: 'info', message: 'Safe event' }]);
+    render(<App/>);
+    await screen.findByRole('button', { name: /My profile Xray configuration/ });
+    openDetails();
+    expect(screen.getByRole('heading', { name: 'Details' })).toBeTruthy();
+    expect(screen.getByText('pinned')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Copy SOCKS5 address' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Copy HTTP address' }));
+    await waitFor(() => expect(writeText.mock.calls).toEqual([['127.0.0.1:10808'], ['127.0.0.1:10809']]));
+    fireEvent.click(screen.getByRole('button', { name: /Diagnostics/ }));
+    expect(screen.getByRole('heading', { name: 'Diagnostics' })).toBeTruthy();
+    expect(await screen.findByText('Safe event')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Back' }));
+    fireEvent.click(screen.getByRole('button', { name: /My profile Xray configuration/ }));
+    expect(screen.getByRole('heading', { name: 'Profiles' })).toBeTruthy();
+    openImport();
+    expect(screen.getByRole('dialog')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Back' }));
+    expect(screen.getByRole('heading', { name: 'Details' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Back' }));
+    expect(screen.getByRole('button', { name: 'Open details' })).toBeTruthy();
+  });
+
+  it('shows bounded diagnostic logs with readable times and preserves their original timestamps', async () => {
+    const stamp = '2026-10-30T12:34:56.123456789Z';
+    const entries = Array.from({ length: 101 }, (_, index) => ({ time: stamp, level: 'info', message: `Entry ${index}` }));
+    entries.push({ time: 'unrecognized timestamp', level: 'warning', message: 'Fallback time' });
+    vi.mocked(api.GetRecentLogs).mockResolvedValue(entries);
+    render(<App/>);
+    await screen.findByRole('button', { name: /My profile Xray configuration/ });
+    openDetails();
+    fireEvent.click(screen.getByRole('button', { name: /Diagnostics/ }));
+    await screen.findByText('Entry 100');
+    expect(api.GetRecentLogs).toHaveBeenCalledWith(100);
+    expect(screen.queryByText('Entry 0')).toBeNull();
+    expect(screen.getAllByText(new Date(stamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })).length).toBe(99);
+    const time = screen.getByText('Entry 100').parentElement!.querySelector('time')!;
+    expect(time.getAttribute('datetime')).toBe(stamp);
+    expect(time.getAttribute('title')).toBe(stamp);
+    expect(screen.getByText('unrecognized timestamp').getAttribute('title')).toBe('unrecognized timestamp');
+  });
+
+  it('shows unavailable runtime and empty diagnostics honestly', async () => {
+    render(<App/>);
+    await screen.findByRole('button', { name: /My profile Xray configuration/ });
+    openDetails();
+    expect(screen.getByText('Version unavailable')).toBeTruthy();
+    expect(screen.getByText(/Last proxy check: Not checked yet/)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: /Diagnostics/ }));
+    expect(await screen.findByText('No activity yet. Runtime events will appear here.')).toBeTruthy();
+    expect(screen.getByText('Last 100 runtime events since app start.')).toBeTruthy();
+  });
+
+  it('keeps connection controls usable when a diagnostic read fails', async () => {
+    vi.mocked(api.GetRecentLogs).mockRejectedValue(new Error('logs unavailable'));
+    render(<App/>);
+    await screen.findByRole('button', { name: /My profile Xray configuration/ });
+    openDetails();
+    fireEvent.click(screen.getByRole('button', { name: /Diagnostics/ }));
+    expect(await screen.findByText('Unable to load diagnostics.')).toBeTruthy();
+    expect(screen.queryByText(/No activity yet/)).toBeNull();
+    expect(screen.queryByText(/Unable to refresh desktop state/)).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Back' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Back' }));
+    expect((screen.getByRole('button', { name: 'Connect' }) as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it('reports diagnostics as unavailable when the desktop bridge is missing', async () => {
+    vi.mocked(desktop).mockReturnValue(undefined);
+    render(<App/>);
+    openDetails();
+    fireEvent.click(screen.getByRole('button', { name: /Diagnostics/ }));
+    expect(await screen.findByText('Unable to load diagnostics.')).toBeTruthy();
+    expect(screen.queryByText(/No activity yet/)).toBeNull();
+  });
+
+  it('does not call an empty log result activity when the backend failed to initialize', async () => {
+    vi.mocked(api.GetStatus).mockResolvedValue({ ...initialStatus, revision: 1, state: 'Error', processState: 'error', message: 'Backend startup failed' });
+    render(<App/>);
+    await screen.findByText('Backend startup failed');
+    openDetails();
+    fireEvent.click(screen.getByRole('button', { name: /Diagnostics/ }));
+    expect(await screen.findByText('Unable to load diagnostics.')).toBeTruthy();
+    expect(screen.queryByText(/No activity yet/)).toBeNull();
+  });
+
+  it('waits for the startup status before presenting an empty log result', async () => {
+    let finishStatus!: (value: typeof initialStatus) => void;
+    vi.mocked(api.GetStatus).mockReturnValue(new Promise(resolve => { finishStatus = resolve; }));
+    render(<App/>);
+    openDetails();
+    fireEvent.click(screen.getByRole('button', { name: /Diagnostics/ }));
+    await waitFor(() => expect(api.GetRecentLogs).toHaveBeenCalledTimes(2));
+    expect(screen.getByText('Loading diagnostics…')).toBeTruthy();
+    expect(screen.queryByText(/No activity yet/)).toBeNull();
+    await act(async () => finishStatus({ ...initialStatus, revision: 1, state: 'Error', processState: 'error', message: 'Backend startup failed' }));
+    expect(await screen.findByText('Unable to load diagnostics.')).toBeTruthy();
+    expect(screen.queryByText(/No activity yet/)).toBeNull();
+  });
+
+  it('reports diagnostics unavailable when the initial status cannot be read', async () => {
+    vi.mocked(api.GetStatus).mockRejectedValue(new Error('status unavailable'));
+    render(<App/>);
+    openDetails();
+    fireEvent.click(screen.getByRole('button', { name: /Diagnostics/ }));
+    expect(await screen.findByText('Unable to load diagnostics.')).toBeTruthy();
+    expect(screen.queryByText(/No activity yet/)).toBeNull();
+  });
+
+  it.each(['fails', 'stalls'])('retains successful logs when profile refresh %s', async outcome => {
+    const entry = { time: '12:00', level: 'info', message: 'Independent log' };
+    vi.mocked(api.GetRecentLogs).mockResolvedValue([entry]);
+    if (outcome === 'fails') vi.mocked(api.ListProfiles).mockRejectedValue(new Error('profiles unavailable'));
+    else vi.mocked(api.ListProfiles).mockReturnValue(new Promise(() => {}));
+    render(<App/>);
+    openDetails();
+    const diagnostics = await screen.findByRole('button', { name: /Diagnostics 1/ });
+    fireEvent.click(diagnostics);
+    expect(await screen.findByText('Independent log')).toBeTruthy();
+  });
+
+  it.each(['succeeds', 'fails'])('keeps a newer diagnostic snapshot when an older read %s later', async outcome => {
+    let finishOld!: () => void;
+    let finishNew!: () => void;
+    const old = { time: '11:00', level: 'info', message: 'Old log' };
+    const recent = { time: '12:00', level: 'info', message: 'Fresh log' };
+    vi.mocked(api.GetRecentLogs)
+      .mockReturnValueOnce(new Promise((resolve, reject) => { finishOld = () => outcome === 'fails' ? reject(new Error('old failure')) : resolve([old]); }))
+      .mockReturnValueOnce(new Promise(resolve => { finishNew = () => resolve([recent]); }));
+    render(<App/>);
+    await screen.findByRole('button', { name: /My profile Xray configuration/ });
+    openDetails();
+    fireEvent.click(screen.getByRole('button', { name: /Diagnostics/ }));
+    expect(screen.getByText('Loading diagnostics…')).toBeTruthy();
+    expect(api.GetRecentLogs).toHaveBeenCalledTimes(2);
+    await act(async () => finishNew());
+    expect(await screen.findByText('Fresh log')).toBeTruthy();
+    await act(async () => finishOld());
+    expect(screen.getByText('Fresh log')).toBeTruthy();
+    expect(screen.queryByText('Old log')).toBeNull();
+    expect(screen.queryByText('Unable to load diagnostics.')).toBeNull();
+  });
+
   it.each(['rename', 'import', 'delete', 'subscription'])('stops inside a modal before pending %s storage completes', async kind => {
     let finish!: () => void;
     const held = new Promise<typeof profile>(resolve => { finish = () => resolve(profile); });
@@ -35,7 +216,7 @@ describe('desktop UI', () => {
     else if (kind === 'subscription') vi.mocked(api.ImportSubscriptionCandidate).mockReturnValue(held);
     else vi.mocked(api.DeleteProfile).mockReturnValue(held.then(() => undefined));
     render(<App/>); await screen.findByRole('button', { name: /My profile (Active profile|Xray configuration)/ });
-    fireEvent.click(screen.getByRole('button', { name: kind === 'rename' ? 'Rename profile' : kind === 'delete' ? 'Delete profile' : 'Import profile' }));
+    openDetails(); fireEvent.click(screen.getByRole('button', { name: kind === 'rename' ? 'Rename profile' : kind === 'delete' ? 'Delete profile' : 'Import profile' }));
     if (kind === 'delete') fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Delete profile' }));
     else {
       if (kind === 'subscription') {
@@ -82,7 +263,7 @@ describe('desktop UI', () => {
     vi.mocked(api.Disconnect).mockReturnValueOnce(new Promise((_, reject) => { failStop = reject; })).mockReturnValue(new Promise(() => {}));
     vi.mocked(api.GetStatus).mockResolvedValue({ ...initialStatus, revision: 1, state: 'Connected', processState: 'running', sessionId: 'owned', profileId: profile.id });
     render(<App/>); await screen.findByRole('button', { name: /My profile Active profile/ });
-    fireEvent.click(screen.getByRole('button', { name: 'Rename profile' }));
+    openDetails(); fireEvent.click(screen.getByRole('button', { name: 'Rename profile' }));
     fireEvent.submit(screen.getByLabelText('Profile name').closest('form')!);
     await waitFor(() => expect(api.RenameProfile).toHaveBeenCalledOnce());
     fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Disconnect' }));
@@ -112,7 +293,9 @@ describe('desktop UI', () => {
   it('permits profile repair and another connection after a cleaned failure', async () => {
     vi.mocked(api.GetStatus).mockResolvedValue({ ...initialStatus, revision: 1, state: 'Error', processState: 'error', profileId: profile.id });
     render(<App/>); await screen.findByRole('button', { name: /My profile Xray configuration/ });
+    openDetails();
     expect((screen.getByRole('button', { name: 'Import profile' }) as HTMLButtonElement).disabled).toBe(false);
+    fireEvent.click(screen.getByRole('button', { name: 'Back' }));
     fireEvent.click(screen.getByRole('button', { name: 'Connect' }));
     expect(api.Connect).toHaveBeenCalledWith(profile.id);
   });
@@ -147,7 +330,7 @@ describe('desktop UI', () => {
   });
   it('loads metadata, requires a selection and imports only the chosen candidate', async () => {
     render(<App/>); await screen.findByRole('button', { name: /My profile Xray configuration/ });
-    fireEvent.click(screen.getByRole('button', { name: 'Import profile' }));
+    openImport();
     fireEvent.change(screen.getByLabelText('Import from'), { target: { value: 'link' } });
     const source = screen.getByLabelText('Subscription URL or VLESS link') as HTMLInputElement;
     expect(source.type).toBe('password');
@@ -160,7 +343,7 @@ describe('desktop UI', () => {
     fireEvent.submit(screen.getByLabelText('Profile name').closest('form')!);
     await waitFor(() => expect(api.ImportSubscriptionCandidate).toHaveBeenCalledWith('opaque-2', 'Candidate two'));
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
-    fireEvent.click(screen.getByRole('button', { name: 'Import profile' }));
+    openImport();
     expect((screen.getByLabelText('Subscription URL or VLESS link') as HTMLInputElement).value).toBe('');
     expect(localStorage.length).toBe(0);
   });
@@ -169,7 +352,7 @@ describe('desktop UI', () => {
     vi.mocked(api.PreviewSubscription).mockReturnValue(new Promise(resolve => { finish = resolve; }));
     vi.mocked(api.GetStatus).mockResolvedValue({ ...initialStatus, processState, profileId: processState === 'stopped' ? '' : profile.id });
     render(<App/>); await screen.findByRole('button', { name: /My profile (Xray configuration|Active profile)/ });
-    fireEvent.click(screen.getByRole('button', { name: 'Import profile' }));
+    openImport();
     fireEvent.change(screen.getByLabelText('Import from'), { target: { value: 'link' } });
     fireEvent.change(screen.getByLabelText('Subscription URL or VLESS link'), { target: { value: 'vless://synthetic-secret' } });
     fireEvent.click(screen.getByRole('button', { name: 'Load profiles' }));
@@ -191,7 +374,7 @@ describe('desktop UI', () => {
     const finishClears: (() => void)[] = [];
     vi.mocked(api.ClearSubscriptionPreview).mockImplementation(() => new Promise(resolve => { finishClears.push(resolve); }));
     render(<App/>); await screen.findByRole('button', { name: /My profile Xray configuration/ });
-    fireEvent.click(screen.getByRole('button', { name: 'Import profile' }));
+    openImport();
     fireEvent.change(screen.getByLabelText('Import from'), { target: { value: 'link' } });
     fireEvent.change(screen.getByLabelText('Subscription URL or VLESS link'), { target: { value: 'https://example.invalid/synthetic' } });
     fireEvent.click(screen.getByRole('button', { name: 'Load profiles' }));
@@ -205,7 +388,7 @@ describe('desktop UI', () => {
   });
   it('invalidates candidates on source edits and clears the backend preview on unmount', async () => {
     const view = render(<App/>); await screen.findByRole('button', { name: /My profile Xray configuration/ });
-    fireEvent.click(screen.getByRole('button', { name: 'Import profile' }));
+    openImport();
     fireEvent.change(screen.getByLabelText('Import from'), { target: { value: 'link' } });
     fireEvent.change(screen.getByLabelText('Subscription URL or VLESS link'), { target: { value: 'https://example.invalid/a' } });
     fireEvent.click(screen.getByRole('button', { name: 'Load profiles' }));
@@ -225,6 +408,7 @@ describe('desktop UI', () => {
     render(<App/>);
     await screen.findByText(message);
     expect(screen.getByRole('heading', { name: 'Connection needs attention.' })).toBeTruthy();
+    openDetails();
     expect((screen.getByRole('button', { name: 'Import profile' }) as HTMLButtonElement).disabled).toBe(true);
     expect(screen.queryByText('Desktop bridge unavailable')).toBeNull();
   });
@@ -267,11 +451,12 @@ describe('desktop UI', () => {
     await screen.findByText('Xray is running.');
     expect(screen.getByText('Check failed')).toBeTruthy();
     expect(screen.queryByText('Proxy is ready.')).toBeNull();
+    openDetails();
     expect((screen.getByRole('button', { name: 'Delete profile' }) as HTMLButtonElement).disabled).toBe(true);
   });
   it('rejects a share URL locally without forwarding it or echoing it in an error', async () => {
     render(<App/>); await screen.findByRole('button', { name: /My profile Xray configuration/ });
-    fireEvent.click(screen.getByRole('button', { name: 'Import profile' }));
+    openImport();
     fireEvent.change(screen.getByLabelText('Profile name'), { target: { value: 'Test' } });
     fireEvent.change(screen.getByLabelText('Xray configuration'), { target: { value: 'vless://secret-value' } });
     fireEvent.submit(screen.getByLabelText('Profile name').closest('form')!);
@@ -280,7 +465,7 @@ describe('desktop UI', () => {
   });
   it('passes complete JSON unchanged, clears it after save, and never stores it in localStorage', async () => {
     render(<App/>); await screen.findByRole('button', { name: /My profile Xray configuration/ });
-    fireEvent.click(screen.getByRole('button', { name: 'Import profile' }));
+    openImport();
     const json = '{ "outbounds": [{ "protocol": "vless", "settings": { "id": "private-value" } }] }';
     fireEvent.change(screen.getByLabelText('Profile name'), { target: { value: 'Imported' } });
     fireEvent.change(screen.getByLabelText('Xray configuration'), { target: { value: json } });
@@ -288,16 +473,16 @@ describe('desktop UI', () => {
     await waitFor(() => expect(api.ImportProfile).toHaveBeenCalledWith('Imported', json));
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
     await waitFor(() => expect((screen.getByRole('button', { name: 'Import profile' }) as HTMLButtonElement).disabled).toBe(false));
-    fireEvent.click(screen.getByRole('button', { name: 'Import profile' }));
+    openImport();
     expect((screen.getByLabelText('Xray configuration') as HTMLTextAreaElement).value).toBe('');
     expect(localStorage.length).toBe(0);
   });
   it('clears secrets after cancel and prevents delete without confirmation', async () => {
     render(<App/>); await screen.findByRole('button', { name: /My profile Xray configuration/ });
-    fireEvent.click(screen.getByRole('button', { name: 'Import profile' }));
+    openImport();
     fireEvent.change(screen.getByLabelText('Xray configuration'), { target: { value: 'private-text' } });
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Import profile' }));
+    openImport();
     expect((screen.getByLabelText('Xray configuration') as HTMLTextAreaElement).value).toBe('');
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
     fireEvent.click(screen.getByRole('button', { name: 'Delete profile' }));
@@ -356,7 +541,7 @@ describe('desktop UI', () => {
   it('requires explicit acknowledgment of discarded sections and invalidates preview when edited', async () => {
     vi.mocked(api.PreviewImport).mockResolvedValue({ droppedSections: ['routing', 'inbounds'], warning: 'Original routes will not be copied.' });
     render(<App/>); await screen.findByRole('button', { name: /My profile Xray configuration/ });
-    fireEvent.click(screen.getByRole('button', { name: 'Import profile' }));
+    openImport();
     fireEvent.change(screen.getByLabelText('Profile name'), { target: { value: 'Imported' } });
     fireEvent.change(screen.getByLabelText('Xray configuration'), { target: { value: '{"outbounds":[]}' } });
     fireEvent.submit(screen.getByLabelText('Profile name').closest('form')!);
@@ -376,7 +561,7 @@ describe('desktop UI', () => {
   });
   it('renames a profile through the backend', async () => {
     render(<App/>); await screen.findByRole('button', { name: /My profile Xray configuration/ });
-    fireEvent.click(screen.getByRole('button', { name: 'Rename profile' }));
+    openDetails(); fireEvent.click(screen.getByRole('button', { name: 'Rename profile' }));
     fireEvent.change(screen.getByLabelText('Profile name'), { target: { value: 'New name' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save name' }));
     await waitFor(() => expect(api.RenameProfile).toHaveBeenCalledWith(profile.id, 'New name'));
@@ -386,6 +571,7 @@ describe('desktop UI', () => {
     vi.mocked(api.GetStatus).mockResolvedValue({ ...initialStatus, state: 'Degraded', processState: 'running', networkHealth: 'unhealthy', xrayVersion: 'test-pinned', lastCheckedAt: '2026-10-30T12:00:00Z' });
     render(<App/>);
     await screen.findByText('Degraded');
+    openDetails();
     expect(screen.getByText('test-pinned')).toBeTruthy();
     expect(screen.getByText(/Last proxy check: 2026-10-30T12:00:00Z/)).toBeTruthy();
   });
