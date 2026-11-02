@@ -13,8 +13,6 @@ import (
 // These pins are derived from the official, unmodified Windows x64 release.
 const XrayVersion = "26.10.29"
 const XrayExecutableSHA256 = "07a332b714a3c0eee047a22a9c0ea749b64df33e4e1ff6d28a8c7f9ef943ce10"
-const XrayArchiveSHA256 = "fce33e81cccf50e7aab572b175519a50b5e0f9d2f5c8d1ed73012ea5c9ad4d58"
-const XrayReleaseURL = "https://github.com/XTLS/Xray-core/releases/tag/v26.10.29"
 
 var errBundledRuntimeMissing = errors.New("bundled Xray runtime is missing")
 

@@ -170,8 +170,6 @@ func (s *Service) GetRecentLogs(limit int) []LogEntry {
 	}
 	return append([]LogEntry{}, logs[len(logs)-limit:]...)
 }
-func (s *Service) GetLogs() []LogEntry                               { return s.GetRecentLogs(200) }
-func (s *Service) PreviewImport(input string) (ImportPreview, error) { return PreviewImport(input) }
 func (s *Service) ListProfiles() ([]Profile, error) {
 	s.storeMu.Lock()
 	defer s.storeMu.Unlock()
@@ -448,7 +446,7 @@ func (s *Service) loop() {
 			switch ev.kind {
 			case "Diagnostic":
 				switch ev.message {
-				case "xray-output", "xray-warning", "xray-error", "xray-stdout-observed", "xray-stderr-observed":
+				case "xray-stdout-observed", "xray-stderr-observed":
 					logs = append(logs, LogEntry{ev.at.UTC().Format(time.RFC3339Nano), "info", ev.message})
 					if len(logs) > 200 {
 						logs = logs[len(logs)-200:]

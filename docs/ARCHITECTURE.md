@@ -24,7 +24,7 @@ The Wails facade retains safe core startup errors while allowing the native wind
 
 ## Trust, storage and crash containment
 
-Only the bundled pinned Windows x64 Xray is allowed. SHA-256 is checked before every invocation including preflight; pinned version and official release provenance are in runtime.go and licenses/NOTICE.md. The runtime file is not a sandbox; this does not defend against an attacker already able to modify the user's process/memory or files concurrently.
+Only the bundled pinned Windows x64 Xray is allowed. SHA-256 is checked before every invocation including preflight; the version and executable pin are in runtime.go, the archive pin is in scripts/package_runtime.py, and release provenance is in licenses/NOTICE.md. The runtime file is not a sandbox; this does not defend against an attacker already able to modify the user's process/memory or files concurrently.
 
 Windows profile encryption is DPAPI; directories have restricted DACLs. A crash-released exclusive OS file lock owns the data directory. Stale runtime directories are removed only while holding this lock, before connecting. Live second instances fail without deleting anything. Normal cleanup removes plaintext runtime files but secure erasure is not claimed.
 

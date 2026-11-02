@@ -155,7 +155,7 @@ func TestPreflightErrorsNeverExposeCoreDiagnostics(t *testing.T) {
 	if strings.Contains(s.GetStatus().Message, "secret") {
 		t.Fatal("status leaked diagnostics")
 	}
-	for _, log := range s.GetLogs() {
+	for _, log := range s.GetRecentLogs(200) {
 		if strings.Contains(log.Message, "secret") {
 			t.Fatal("log leaked diagnostics")
 		}
@@ -330,10 +330,10 @@ func TestOldSessionEventsIgnoredAndUniqueIDs(t *testing.T) {
 	for _, kind := range []string{"ProcessExited", "ProcessStarted", "ProxyReady", "HealthFailed", "ConfigValidated", "CleanupFailed", "StopFailed", "StopCompleted"} {
 		s.events <- workerEvent{sessionID: old, kind: kind, message: "stale failure", ok: true}
 	}
-	s.events <- workerEvent{sessionID: before.SessionID, kind: "Diagnostic", message: "xray-warning", at: time.Now()}
+	s.events <- workerEvent{sessionID: before.SessionID, kind: "Diagnostic", message: "xray-stdout-observed", at: time.Now()}
 	waitForService(t, func() bool {
-		for _, log := range s.GetLogs() {
-			if log.Message == "xray-warning" {
+		for _, log := range s.GetRecentLogs(200) {
+			if log.Message == "xray-stdout-observed" {
 				return true
 			}
 		}
@@ -410,20 +410,27 @@ func TestDiagnosticAllowlistAndBound(t *testing.T) {
 	s.Connect(p.ID)
 	waitState(t, s, "running")
 	id := s.GetStatus().SessionID
-	s.events <- workerEvent{sessionID: id, kind: "Diagnostic", message: "secret-id https://secret.invalid/?token=secret", at: time.Now()}
 	for i := 0; i < 220; i++ {
 		s.events <- workerEvent{sessionID: id, kind: "Diagnostic", message: "xray-stderr-observed", at: time.Now()}
 	}
-	deadline := time.Now().Add(time.Second)
-	for len(s.GetRecentLogs(1000)) < 200 && time.Now().Before(deadline) {
-		time.Sleep(time.Millisecond)
+	for _, message := range []string{"secret-id https://secret.invalid/?token=secret", "xray-output", "xray-warning", "xray-error"} {
+		s.events <- workerEvent{sessionID: id, kind: "Diagnostic", message: message, at: time.Now()}
 	}
+	s.events <- workerEvent{sessionID: id, kind: "Diagnostic", message: "xray-stdout-observed", at: time.Now()}
+	waitForService(t, func() bool {
+		for _, entry := range s.GetRecentLogs(200) {
+			if entry.Message == "xray-stdout-observed" {
+				return true
+			}
+		}
+		return false
+	})
 	logs := s.GetRecentLogs(1000)
 	if len(logs) != 200 {
 		t.Fatalf("bounded log count %d", len(logs))
 	}
 	for _, entry := range logs {
-		if strings.Contains(entry.Message, "secret") {
+		if strings.Contains(entry.Message, "secret") || entry.Message == "xray-output" || entry.Message == "xray-warning" || entry.Message == "xray-error" {
 			t.Fatal("untrusted diagnostic leaked")
 		}
 	}
@@ -538,10 +545,10 @@ func TestExitedSessionRejectsLateEventsUntilCleanup(t *testing.T) {
 			id := s.GetStatus().SessionID
 			s.events <- workerEvent{sessionID: id, kind: "ProcessExited", ok: true}
 			s.events <- workerEvent{sessionID: id, kind: kind, ok: true, at: time.Now()}
-			s.events <- workerEvent{sessionID: id, kind: "Diagnostic", message: "xray-warning", at: time.Now()}
+			s.events <- workerEvent{sessionID: id, kind: "Diagnostic", message: "xray-stdout-observed", at: time.Now()}
 			waitForService(t, func() bool {
-				for _, log := range s.GetLogs() {
-					if log.Message == "xray-warning" {
+				for _, log := range s.GetRecentLogs(200) {
+					if log.Message == "xray-stdout-observed" {
 						return true
 					}
 				}
@@ -660,10 +667,10 @@ func TestCancelledSessionRejectsLateProgressUntilCleanup(t *testing.T) {
 	for _, kind := range []string{"ConfigValidated", "ProcessStarted", "ProxyReady", "HealthFailed"} {
 		s.events <- workerEvent{sessionID: before.SessionID, kind: kind, ok: true, at: time.Now()}
 	}
-	s.events <- workerEvent{sessionID: before.SessionID, kind: "Diagnostic", message: "xray-warning", at: time.Now()}
+	s.events <- workerEvent{sessionID: before.SessionID, kind: "Diagnostic", message: "xray-stdout-observed", at: time.Now()}
 	waitForService(t, func() bool {
-		for _, log := range s.GetLogs() {
-			if log.Message == "xray-warning" {
+		for _, log := range s.GetRecentLogs(200) {
+			if log.Message == "xray-stdout-observed" {
 				return true
 			}
 		}

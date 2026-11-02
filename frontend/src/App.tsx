@@ -79,7 +79,7 @@ export default function App() {
       const api = desktop();
       if (!api) throw new Error('Desktop bridge unavailable');
       const nextLogs = await api.GetRecentLogs(100);
-      if (alive.current && version === logsRevision.current) { setLogs(nextLogs || []); setLogsState('ready'); }
+      if (alive.current && version === logsRevision.current) { setLogs(nextLogs); setLogsState('ready'); }
     } catch {
       if (alive.current && version === logsRevision.current) setLogsState('unavailable');
     }
@@ -106,8 +106,8 @@ export default function App() {
       });
       const [nextProfiles] = await Promise.all([api.ListProfiles(), statusRequest]);
       if (!alive.current || version !== revision.current) return;
-      setAvailable(true); setSyncError(''); setProfiles(nextProfiles || []);
-      setSelectedId(id => (nextProfiles || []).some(p => p.id === id) ? id : (nextProfiles || [])[0]?.id || '');
+      setAvailable(true); setSyncError(''); setProfiles(nextProfiles);
+      setSelectedId(id => nextProfiles.some(p => p.id === id) ? id : nextProfiles[0]?.id || '');
     } catch { if (alive.current && version === revision.current) setSyncError('Unable to refresh desktop state. Try again; the process state shown may be out of date.'); }
     finally { if (version === revision.current) pollBusy.current = false; }
   }, [refreshLogs]);

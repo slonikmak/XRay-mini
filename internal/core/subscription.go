@@ -333,9 +333,6 @@ func parseVLESSLink(link string) (SubscriptionProfile, error) {
 	if err != nil {
 		return fail("VLESS link could not be converted")
 	}
-	if _, err := PreviewImport(string(raw)); err != nil {
-		return fail("VLESS link uses unsupported configuration dependencies")
-	}
 	if _, err := PrepareConfig(raw); err != nil {
 		return fail("VLESS link uses unsupported configuration dependencies")
 	}

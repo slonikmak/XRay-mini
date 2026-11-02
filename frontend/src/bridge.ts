@@ -1,21 +1,10 @@
 import * as AppService from "../bindings/github.com/slonikmak/XRay-mini/app";
+import type { Profile, Status, LogEntry, ImportPreview as RawImportPreview } from '../bindings/github.com/slonikmak/XRay-mini/internal/core/models';
+import type { SubscriptionCandidate } from '../bindings/github.com/slonikmak/XRay-mini/models';
 import { System, Events } from "@wailsio/runtime";
 
-export interface Profile { id: string; name: string; createdAt: string }
-export interface Status {
-  revision: number;
-  state: string;
-  sessionId: string;
-  lastCheckedAt: string;
-  xrayVersion: string;
-  processState: string;
-  networkHealth: string;
-  profileId: string;
-  message: string;
-}
-export interface ImportPreview { droppedSections: string[]; warning: string }
-export interface SubscriptionCandidate { id: string; name: string; transport: string }
-export interface LogEntry { time: string; level: string; message: string }
+export type { Profile, Status, LogEntry, SubscriptionCandidate };
+export type ImportPreview = Omit<RawImportPreview, 'droppedSections'> & { droppedSections: string[] };
 export interface DesktopAPI {
   ListProfiles(): Promise<Profile[]>;
   ImportProfile(name: string, configJSON: string): Promise<Profile>;
