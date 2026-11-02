@@ -64,7 +64,7 @@ export default function App() {
   const logsRevision = useRef(0);
   const pollBusy = useRef(false);
   const messagesRef = useRef<HTMLDivElement>(null);
-  const importFormRef = useRef<HTMLFormElement>(null);
+  const importErrorRef = useRef<HTMLDivElement>(null);
   const selected = profiles.find(p => p.id === selectedId);
   const statusKnown = available && statusReadState === 'ready';
   const statusWaiting = available && statusReadState === 'loading';
@@ -83,7 +83,9 @@ export default function App() {
     if (screen === 'home' && connectionError && messagesRef.current) messagesRef.current.scrollTop = 0;
   }, [screen, connectionError]);
   useEffect(() => {
-    if (screen === 'import' && error && importFormRef.current) importFormRef.current.scrollTop = 0;
+    if (screen === 'import' && error && messagesRef.current && importErrorRef.current) {
+      messagesRef.current.scrollTop += importErrorRef.current.getBoundingClientRect().top - messagesRef.current.getBoundingClientRect().top;
+    }
   }, [screen, error]);
 
   const refreshLogs = useCallback(async () => {
@@ -231,6 +233,8 @@ export default function App() {
   const statusLabel = !statusKnown ? statusWaiting ? 'Checking status…' : 'Status unavailable' : starting ? 'Connecting' : status.state === 'Error' ? status.state : disconnecting ? 'Disconnecting' : checkFailed && status.state !== 'Degraded' ? 'Check failed' : status.state;
   const modalStop = <>{active && <div><button type="button" className="secondary" aria-label={loadingSubscription ? `${connectionLabel} during loading` : undefined} disabled={connectionDisabled} onClick={() => { void toggleConnection(); }}>{connectionLabel}</button>{status.message && <p role="status">{status.message}</p>}</div>}{connectionError && <div className="alert error" role="alert">{connectionError}</div>}</>;
   const activeProfile = profiles.find(profile => profile.id === status.profileId);
+  const importSessionVisible = active || !!busy || loadingSubscription;
+  const importSessionName = active ? activeProfile?.name || 'Profile unavailable' : selected?.name || 'None';
   const statusDetail = !statusKnown ? statusWaiting ? 'Waiting for desktop status.' : 'Desktop status is unavailable.' : status.message || (status.processState === 'stopped' ? 'Local proxy is stopped' : 'Process status and network reachability are checked separately.');
   const logsUnavailable = logsState === 'unavailable' || (logsState === 'ready' && !logs.length && (backendUnavailable || statusReadState === 'unavailable'));
   const logsLoading = logsState === 'loading' || (logsState === 'ready' && !logs.length && statusReadState === 'loading');
@@ -243,17 +247,17 @@ export default function App() {
   return <div className="app-shell">
     <main>
       {screen === 'home' ? <header className="home-header"><span className={`status-pill ${ready ? 'good' : ''}`}><span className="small-dot"/>{statusLabel}</span><button className="icon-button header-button" aria-label="Open details" onClick={() => setScreen('details')}><Icon name="info"/></button></header> :
-      <header className="screen-header"><button className="icon-button header-button" aria-label="Back" disabled={screen === 'import' && !!busy} onClick={() => screen === 'import' ? closeImport() : setScreen(screen === 'profiles' ? profilesBack : screen === 'diagnostics' ? 'details' : 'home')}><Icon name="back"/></button><h1>{screen === 'details' ? 'Details' : screen === 'profiles' ? 'Profiles' : screen === 'import' ? 'Import a profile' : 'Diagnostics'}</h1>{screen === 'profiles' && <span className="header-count">{profiles.length}</span>}{screen === 'diagnostics' && <span className="header-count">{logCount}</span>}</header>}
-      <div className={`status-messages ${screen === 'home' ? 'home-messages' : ''}`} ref={messagesRef}>
+      <header className="screen-header"><button className="icon-button header-button" aria-label="Back" disabled={screen === 'import' && !!busy} onClick={() => screen === 'import' ? closeImport() : setScreen(screen === 'profiles' ? profilesBack : screen === 'diagnostics' ? 'details' : 'home')}><Icon name="back"/></button><h1>{screen === 'details' ? 'Details' : screen === 'profiles' ? 'Profiles' : screen === 'import' ? 'Import a profile' : 'Diagnostics'}</h1>{screen === 'import' && importSessionVisible && <button className="secondary import-session" aria-label={loadingSubscription ? active ? `${connectionLabel} during loading` : 'Connect selected profile during loading' : undefined} title={`${active ? 'Active' : 'Selected'}: ${importSessionName}`} disabled={connectionDisabled} onClick={() => { void toggleConnection(); }}>{connectionLabel}</button>}{screen === 'profiles' && <span className="header-count">{profiles.length}</span>}{screen === 'diagnostics' && <span className="header-count">{logCount}</span>}</header>}
+      <div className={`status-messages ${screen === 'home' ? 'home-messages' : screen === 'import' ? 'import-messages' : ''}`} ref={messagesRef}>
         {screen !== 'home' && status.state === 'Error' && status.message && <div className="alert error" role="alert">{status.message}</div>}
         {!available && <div className="bridge-banner" role="status"><strong>Desktop bridge unavailable</strong><span>This is a browser preview. Open the Wails desktop app to import profiles and run Xray.</span></div>}
         {connectionError && !modal && <div className="alert error" role="alert">{connectionError}</div>}
+        {error && !modal && <div className="alert error" role="alert" ref={screen === 'import' ? importErrorRef : undefined}>{error}</div>}
         {syncError && <div className="alert error" role="alert">{syncError}<button onClick={() => { void refresh(true); }}>Retry</button></div>}
-        {error && !modal && screen !== 'import' && <div className="alert error" role="alert">{error}</div>}
         {notice && <div className="alert notice" role="status">{notice}</div>}
       </div>
-      {screen !== 'home' && active && <div className="session-action"><span>Active: {activeProfile?.name || 'Profile unavailable'}</span><button className="secondary" aria-label={screen === 'import' && loadingSubscription ? `${connectionLabel} during loading` : undefined} disabled={connectionDisabled} onClick={() => { void toggleConnection(); }}>{connectionLabel}</button></div>}
-      {screen === 'import' && !active && !!busy && <div className="session-action"><span>Selected: {selected?.name || 'No profile selected'}</span><button className="secondary" disabled={connectionDisabled} onClick={() => { void toggleConnection(); }}>{connectionLabel}</button></div>}
+      {screen !== 'home' && screen !== 'import' && active && <div className="session-action"><span>Active: {activeProfile?.name || 'Profile unavailable'}</span><button className="secondary" disabled={connectionDisabled} onClick={() => { void toggleConnection(); }}>{connectionLabel}</button></div>}
+      {screen === 'import' && importSessionVisible && <p className="import-session-name">{active ? 'Active' : 'Selected'}: <strong title={importSessionName}>{importSessionName}</strong></p>}
       {screen === 'home' && <div className="home-screen"><div className="home-content">
         {selected ? <button className="profile selected" onClick={() => openProfiles('home')}>{profileCard(selected)}<Icon name="arrow"/></button> :
           <button className="profile empty-profile" onClick={() => openProfiles('home')}><span className="profile-icon"><Icon name="plus"/></span><span className="profile-text"><strong>No profile selected</strong><small>Import a profile to get started</small></span><Icon name="arrow"/></button>}
@@ -300,22 +304,25 @@ export default function App() {
         <div className="log-list" aria-label="Recent diagnostic logs">{logsUnavailable ? <p role="status">Unable to load diagnostics.</p> : logsLoading ? <p role="status">Loading diagnostics…</p> : logs.length ? logs.slice(-100).map((entry, index) => <div className="log-entry" key={`${entry.time}-${index}`}><time dateTime={entry.time} title={entry.time}>{logTime(entry.time)}</time><span role="img" aria-label={entry.level} className={`small-dot log-dot ${entry.level === 'info' && entry.message === 'HTTP proxy check passed; other destinations may differ' ? 'good-dot' : ''}`}/><span className="log-message">{entry.level !== 'info' && <span className={`log-level ${entry.level}`}>{entry.level} · </span>}{entry.message}</span></div>) : <p>No activity yet. Runtime events will appear here.</p>}</div>
         <p className="footer-note">Last 100 runtime events since app start.</p>
       </div>}
-      {screen === 'import' && <form className="import-screen" ref={importFormRef} onSubmit={event => { void importProfile(event); }}>
-      {error && <div className="alert error" role="alert">{error}</div>}
+      {screen === 'import' && <form className="import-screen" onSubmit={event => { void importProfile(event); }}><div className="import-content">
+      {importKind === 'json' && preview && preview.droppedSections.length > 0 ? <>
+      <div className="import-review alert notice" role="status"><strong>Only the selected VLESS outbound will be imported.</strong><div className="review-details" tabIndex={0} role="region" aria-label="Import warning details"><p>{preview.warning}</p><p>Discarded sections: {[...new Set(preview.droppedSections)].join(', ')}</p></div><label><input type="checkbox" checked={acknowledged} onChange={e => setAcknowledged(e.target.checked)} disabled={!!busy}/>I understand these sections will not be used.</label></div>
+      <button type="button" className="secondary import-edit" disabled={!!busy} onClick={() => { setPreview(null); setAcknowledged(false); setError(''); }}>Edit configuration</button>
+      </> : <>
       <div className="import-field"><label htmlFor="import-kind">Import from</label><select id="import-kind" value={importKind} disabled={!!busy} onChange={e => { clearSubscription(); setSource(''); setConfig(''); setName(''); setPreview(null); setAcknowledged(false); setError(''); setImportKind(e.target.value as 'json' | 'link'); }}><option value="json">Xray JSON</option><option value="link">Subscription or VLESS link</option></select></div>
       {importKind === 'json' ? <><p className="modal-description">Paste a complete Xray JSON configuration. Reality and xHTTP settings are preserved; local proxy inbounds are managed by the app.</p>
       <div className="import-field"><label htmlFor="profile-name">Profile name</label><input id="profile-name" autoFocus value={name} onChange={e => setName(e.target.value)} maxLength={80} required disabled={!!busy} placeholder="My connection" autoComplete="off"/></div>
       <div className="import-field import-config"><label htmlFor="profile-json">Xray configuration</label><textarea id="profile-json" value={config} onChange={e => { setConfig(e.target.value); setPreview(null); setAcknowledged(false); }} required disabled={!!busy} placeholder={'{\n  "outbounds": [...]\n}'} spellCheck={false} autoComplete="off" autoCapitalize="off"/></div>
-      {preview && preview.droppedSections.length > 0 && <div className="alert notice" role="status"><strong>Only the selected VLESS outbound will be imported.</strong><p>{preview.warning}</p><p>Discarded sections: {preview.droppedSections.join(', ')}</p><label><input type="checkbox" checked={acknowledged} onChange={e => setAcknowledged(e.target.checked)} disabled={!!busy}/>I understand these sections will not be used.</label></div>}
-      </> : <><p className="modal-description">Load an HTTPS subscription or one VLESS link, then choose one profile to save. Loading does not connect. The preview expires after five minutes.</p>
+      </> : <><p className="modal-description">Load an HTTPS subscription or VLESS link. Choose a profile; loading does not connect. Preview lasts five minutes.</p>
       <div className="import-field"><label htmlFor="subscription-source">Subscription URL or VLESS link</label><input id="subscription-source" type="password" autoFocus value={source} onChange={e => { clearSubscription(); setSource(e.target.value); setName(''); setError(''); }} maxLength={65536} disabled={!!busy} autoComplete="off" spellCheck={false} autoCapitalize="off"/></div>
       <div className="subscription-actions"><button type="button" className="secondary" disabled={!!busy || !source.trim()} onClick={() => { void loadSubscription(); }}>{loadingSubscription ? 'Reload profiles' : 'Load profiles'}</button>{loadingSubscription && <button type="button" className="secondary" onClick={clearSubscription}>Cancel loading</button>}</div>
-      {loadingSubscription && <><p role="status">Loading profiles…</p>{!active && <button type="button" className="secondary" aria-label="Connect selected profile during loading" disabled={connectionDisabled} onClick={() => { void toggleConnection(); }}>{connectionLabel}</button>}</>}
+      {loadingSubscription && <p className="loading-profiles" role="status">Loading profiles…</p>}
       {candidates.length > 0 && <><div className="import-field"><label htmlFor="subscription-candidate">Choose a profile</label><select id="subscription-candidate" value={candidateId} disabled={!!busy} onChange={e => { setCandidateId(e.target.value); setName(candidates.find(candidate => candidate.id === e.target.value)?.name || ''); }}><option value="">Select one of {candidates.length} profiles</option>{candidates.map(candidate => <option key={candidate.id} value={candidate.id}>{candidate.name} · {candidate.transport}</option>)}</select></div><div className="import-field"><label htmlFor="profile-name">Profile name</label><input id="profile-name" value={name} onChange={e => setName(e.target.value)} maxLength={80} required disabled={!!busy} autoComplete="off"/></div></>}
       </>}
-      <p className="privacy-note"><Icon name="shield"/><span>Contains credentials. {importKind === 'link' && 'HTTPS sources are requested only when you load. '}Only the chosen profile is stored locally; pasted text is cleared on save or when you go back.</span></p>
+      </>}
+      <p className="privacy-note"><Icon name="shield"/><span>{importKind === 'link' ? 'Contains credentials. Only the chosen profile is saved locally; the source is cleared on save or back.' : 'Contains credentials. Only the chosen profile is stored locally; pasted text is cleared on save or when you go back.'}</span></p>
       <button className="primary import-submit" type="submit" disabled={!!busy || !name.trim() || (importKind === 'link' ? !candidateId || loadingSubscription : !config.trim() || (!!preview?.droppedSections.length && !acknowledged))}>{busy ? 'Checking…' : importKind === 'json' && preview?.droppedSections.length ? 'Confirm import' : 'Import profile'}</button>
-      </form>}
+      </div></form>}
     </main>
 
     {modal === 'rename' && selected && <Modal title="Rename profile" onClose={closeModal} busy={!!busy} recovery={modalStop}><form onSubmit={e => { e.preventDefault(); const api = desktop(); if (api) void perform('Renaming', async () => { await api.RenameProfile(selected.id, name.trim()); if (alive.current) { setModal(null); setName(''); setNotice('Profile renamed.'); } }); }}><label htmlFor="rename-name">Profile name</label><input id="rename-name" autoFocus value={name} onChange={e => setName(e.target.value)} maxLength={80} disabled={!!busy} required/>{error && <div className="alert error" role="alert">{error}</div>}<div className="modal-actions"><button type="button" className="secondary" onClick={closeModal} disabled={!!busy}>Cancel</button><button className="primary" disabled={!!busy || !name.trim()}>Save name</button></div></form></Modal>}

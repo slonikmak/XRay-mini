@@ -418,6 +418,7 @@ describe('desktop UI', () => {
     const importScreen = kind === 'import' || kind === 'subscription';
     const area = within(importScreen ? document.querySelector('main')! : screen.getByRole('dialog'));
     if (importScreen) {
+      expect(document.querySelector('.import-session-name')?.textContent).toContain('Active: My profile');
       expect((screen.getByRole('button', { name: 'Back' }) as HTMLButtonElement).disabled).toBe(true);
       fireEvent.click(screen.getByRole('button', { name: 'Back' }));
       expect(screen.getByRole('heading', { name: 'Import a profile' })).toBeTruthy();
@@ -554,6 +555,7 @@ describe('desktop UI', () => {
     await waitFor(() => expect(api.PreviewSubscription).toHaveBeenCalledOnce());
     const connectionAction = screen.getByRole('button', { name: /during loading/ }) as HTMLButtonElement;
     expect(connectionAction.disabled).toBe(false);
+    expect(document.querySelector('.import-session-name')?.textContent).toContain(processState === 'stopped' ? 'Selected: My profile' : 'Active: My profile');
     fireEvent.click(connectionAction);
     await waitFor(() => processState === 'stopped' ? expect(api.Connect).toHaveBeenCalledWith(profile.id) : expect(api.Disconnect).toHaveBeenCalledOnce());
     await waitFor(() => expect((screen.getByRole('button', { name: 'Back' }) as HTMLButtonElement).disabled).toBe(false));
@@ -748,10 +750,7 @@ describe('desktop UI', () => {
     fireEvent.change(screen.getByLabelText('Profile name'), { target: { value: 'Test' } });
     fireEvent.change(screen.getByLabelText('Xray configuration'), { target: { value: 'vless://secret-value' } });
     const form = screen.getByLabelText('Profile name').closest('form')!;
-    form.scrollTop = 100;
     fireEvent.submit(form);
-    expect(form.firstElementChild?.getAttribute('role')).toBe('alert');
-    expect(form.scrollTop).toBe(0);
     expect(screen.getByRole('alert').textContent).not.toContain('secret-value');
     expect(api.ImportProfile).not.toHaveBeenCalled();
   });
@@ -833,24 +832,29 @@ describe('desktop UI', () => {
     await waitFor(() => expect((screen.getByRole('button', { name: 'Connect' }) as HTMLButtonElement).disabled).toBe(false));
   });
   it('requires explicit acknowledgment of discarded sections and invalidates preview when edited', async () => {
-    vi.mocked(api.PreviewImport).mockResolvedValue({ droppedSections: ['routing', 'inbounds'], warning: 'Original routes will not be copied.' });
+    vi.mocked(api.PreviewImport).mockResolvedValue({ droppedSections: ['routing', 'inbounds', 'other top-level sections', 'other top-level sections'], warning: 'Original routes will not be copied.' });
     render(<App/>); await screen.findByRole('button', { name: /My profile Xray configuration/ });
     openImport();
     fireEvent.change(screen.getByLabelText('Profile name'), { target: { value: 'Imported' } });
     fireEvent.change(screen.getByLabelText('Xray configuration'), { target: { value: '{"outbounds":[]}' } });
     fireEvent.submit(screen.getByLabelText('Profile name').closest('form')!);
-    await screen.findByText(/Discarded sections: routing, inbounds/);
+    await screen.findByText('Discarded sections: routing, inbounds, other top-level sections');
     expect(api.ImportProfile).not.toHaveBeenCalled();
     await waitFor(() => expect((screen.getByRole('checkbox') as HTMLInputElement).disabled).toBe(false));
     expect((screen.getByRole('button', { name: 'Confirm import' }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.submit(screen.getByRole('button', { name: 'Confirm import' }).closest('form')!);
+    expect(api.ImportProfile).not.toHaveBeenCalled();
+    await waitFor(() => expect((screen.getByRole('checkbox') as HTMLInputElement).disabled).toBe(false));
     fireEvent.click(screen.getByRole('checkbox'));
+    fireEvent.click(screen.getByRole('button', { name: 'Edit configuration' }));
+    expect((screen.getByLabelText('Xray configuration') as HTMLTextAreaElement).value).toBe('{"outbounds":[]}');
     fireEvent.change(screen.getByLabelText('Xray configuration'), { target: { value: '{"outbounds":[], "routing":{}}' } });
     expect(screen.queryByRole('checkbox')).toBeNull();
     fireEvent.submit(screen.getByLabelText('Profile name').closest('form')!);
     await screen.findByRole('checkbox');
     await waitFor(() => expect((screen.getByRole('checkbox') as HTMLInputElement).disabled).toBe(false));
     fireEvent.click(screen.getByRole('checkbox'));
-    fireEvent.submit(screen.getByLabelText('Profile name').closest('form')!);
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm import' }));
     await waitFor(() => expect(api.ImportProfile).toHaveBeenCalledOnce());
   });
   it('renames a profile through the backend', async () => {
