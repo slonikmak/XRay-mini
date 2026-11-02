@@ -251,8 +251,13 @@ describe('desktop UI', () => {
     fireEvent.click(screen.getByRole('button', { name: /My profile Xray configuration/ }));
     expect(screen.getByRole('heading', { name: 'Profiles' })).toBeTruthy();
     openImport();
-    expect(screen.getByRole('dialog')).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(screen.getByRole('heading', { name: 'Import a profile' })).toBeTruthy();
+    expect(screen.queryByRole('dialog')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Back' }));
+    expect(screen.getByRole('heading', { name: 'Profiles' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Back' }));
+    expect(screen.getByRole('heading', { name: 'Details' })).toBeTruthy();
+    openImport();
     fireEvent.click(screen.getByRole('button', { name: 'Back' }));
     expect(screen.getByRole('heading', { name: 'Details' })).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Back' }));
@@ -379,7 +384,7 @@ describe('desktop UI', () => {
     expect(screen.queryByText('Unable to load diagnostics.')).toBeNull();
   });
 
-  it.each(['rename', 'import', 'delete', 'subscription'])('stops inside a modal before pending %s storage completes', async kind => {
+  it.each(['rename', 'import', 'delete', 'subscription'])('can stop while pending %s storage completes', async kind => {
     let finish!: () => void;
     const held = new Promise<typeof profile>(resolve => { finish = () => resolve(profile); });
     const activeProfileId = kind === 'delete' ? 'another-active-profile' : profile.id;
@@ -407,13 +412,20 @@ describe('desktop UI', () => {
     }
     const operation = kind === 'rename' ? api.RenameProfile : kind === 'import' ? api.ImportProfile : kind === 'subscription' ? api.ImportSubscriptionCandidate : api.DeleteProfile;
     await waitFor(() => expect(operation).toHaveBeenCalledOnce());
-    const stop = within(screen.getByRole('dialog')).getByRole('button', { name: /Disconnect/ });
+    const importScreen = kind === 'import' || kind === 'subscription';
+    const area = within(importScreen ? document.querySelector('main')! : screen.getByRole('dialog'));
+    if (importScreen) {
+      expect((screen.getByRole('button', { name: 'Back' }) as HTMLButtonElement).disabled).toBe(true);
+      fireEvent.click(screen.getByRole('button', { name: 'Back' }));
+      expect(screen.getByRole('heading', { name: 'Import a profile' })).toBeTruthy();
+    }
+    const stop = area.getByRole('button', { name: /Disconnect/ });
     expect((stop as HTMLButtonElement).disabled).toBe(false);
     fireEvent.click(stop); fireEvent.click(stop);
     expect(api.Disconnect).toHaveBeenCalledOnce();
-    expect(screen.getByRole('dialog')).toBeTruthy();
-    const retry = await within(screen.getByRole('dialog')).findByRole('button', { name: 'Retry stop' });
-    expect(within(screen.getByRole('dialog')).getByRole('status').textContent).toBe(stopMessage);
+    expect(importScreen ? screen.getByRole('heading', { name: 'Import a profile' }) : screen.getByRole('dialog')).toBeTruthy();
+    const retry = await area.findByRole('button', { name: 'Retry stop' });
+    expect(importScreen ? area.getByText(stopMessage).textContent : area.getByRole('status').textContent).toBe(stopMessage);
     expect((retry as HTMLButtonElement).disabled).toBe(false);
     fireEvent.click(retry); fireEvent.click(retry);
     expect(api.Disconnect).toHaveBeenCalledTimes(2);
@@ -522,7 +534,7 @@ describe('desktop UI', () => {
     fireEvent.change(screen.getByLabelText('Choose a profile'), { target: { value: 'opaque-2' } });
     fireEvent.submit(screen.getByLabelText('Profile name').closest('form')!);
     await waitFor(() => expect(api.ImportSubscriptionCandidate).toHaveBeenCalledWith('opaque-2', 'Candidate two'));
-    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    await screen.findByRole('heading', { name: 'Details' });
     openImport();
     expect((screen.getByLabelText('Subscription URL or VLESS link') as HTMLInputElement).value).toBe('');
     expect(localStorage.length).toBe(0);
@@ -537,18 +549,17 @@ describe('desktop UI', () => {
     fireEvent.change(screen.getByLabelText('Subscription URL or VLESS link'), { target: { value: 'vless://synthetic-secret' } });
     fireEvent.click(screen.getByRole('button', { name: 'Load profiles' }));
     await waitFor(() => expect(api.PreviewSubscription).toHaveBeenCalledOnce());
-    const dialog = within(screen.getByRole('dialog'));
-    const connectionAction = dialog.getByRole('button', { name: /during loading/ }) as HTMLButtonElement;
+    const connectionAction = screen.getByRole('button', { name: /during loading/ }) as HTMLButtonElement;
     expect(connectionAction.disabled).toBe(false);
     fireEvent.click(connectionAction);
     await waitFor(() => processState === 'stopped' ? expect(api.Connect).toHaveBeenCalledWith(profile.id) : expect(api.Disconnect).toHaveBeenCalledOnce());
-    await waitFor(() => expect((dialog.getByRole('button', { name: 'Cancel' }) as HTMLButtonElement).disabled).toBe(false));
+    await waitFor(() => expect((screen.getByRole('button', { name: 'Back' }) as HTMLButtonElement).disabled).toBe(false));
     fireEvent.click(screen.getByRole('button', { name: 'Cancel loading' }));
     await act(async () => finish([{ id: 'late', name: 'Late candidate', transport: 'XHTTP/TLS' }]));
     expect(screen.queryByLabelText('Choose a profile')).toBeNull();
     expect(api.ClearSubscriptionPreview).toHaveBeenCalled();
-    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
-    expect(screen.queryByRole('dialog')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Back' }));
+    expect(screen.getByRole('heading', { name: 'Details' })).toBeTruthy();
   });
   it('awaits all serialized clears before starting a new subscription preview', async () => {
     const finishClears: (() => void)[] = [];
@@ -565,6 +576,48 @@ describe('desktop UI', () => {
     }
     await screen.findByLabelText('Choose a profile');
     expect(api.PreviewSubscription).toHaveBeenCalledOnce();
+  });
+  it('clears a pending subscription when returning to Profiles and ignores its late result', async () => {
+    let finish!: (value: Awaited<ReturnType<DesktopAPI['PreviewSubscription']>>) => void;
+    vi.mocked(api.PreviewSubscription).mockReturnValue(new Promise(resolve => { finish = resolve; }));
+    render(<App/>); await screen.findByRole('button', { name: /My profile Xray configuration/ });
+    fireEvent.click(screen.getByRole('button', { name: /My profile Xray configuration/ }));
+    openImport();
+    fireEvent.change(screen.getByLabelText('Import from'), { target: { value: 'link' } });
+    fireEvent.change(screen.getByLabelText('Subscription URL or VLESS link'), { target: { value: 'vless://synthetic-secret' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Load profiles' }));
+    await waitFor(() => expect(api.PreviewSubscription).toHaveBeenCalledOnce());
+    fireEvent.click(screen.getByRole('button', { name: 'Back' }));
+    expect(screen.getByRole('heading', { name: 'Profiles' })).toBeTruthy();
+    await act(async () => finish([{ id: 'late', name: 'Late candidate', transport: 'XHTTP/TLS' }]));
+    openImport();
+    expect((screen.getByLabelText('Subscription URL or VLESS link') as HTMLInputElement).value).toBe('');
+    expect(screen.queryByLabelText('Choose a profile')).toBeNull();
+  });
+  it('returns to Profiles after a successful JSON import without connecting', async () => {
+    render(<App/>); await screen.findByRole('button', { name: /My profile Xray configuration/ });
+    fireEvent.click(screen.getByRole('button', { name: /My profile Xray configuration/ }));
+    openImport();
+    fireEvent.change(screen.getByLabelText('Profile name'), { target: { value: 'Imported' } });
+    fireEvent.change(screen.getByLabelText('Xray configuration'), { target: { value: '{"outbounds":[]}' } });
+    fireEvent.submit(screen.getByLabelText('Profile name').closest('form')!);
+    await screen.findByRole('heading', { name: 'Profiles' });
+    expect(api.ImportProfile).toHaveBeenCalledOnce();
+    expect(api.Connect).not.toHaveBeenCalled();
+  });
+  it('keeps the selected connection available while an import is pending', async () => {
+    let finish!: (value: typeof profile) => void;
+    vi.mocked(api.ImportProfile).mockReturnValue(new Promise(resolve => { finish = resolve; }));
+    render(<App/>); await screen.findByRole('button', { name: /My profile Xray configuration/ });
+    openImport();
+    fireEvent.change(screen.getByLabelText('Profile name'), { target: { value: 'Imported' } });
+    fireEvent.change(screen.getByLabelText('Xray configuration'), { target: { value: '{"outbounds":[]}' } });
+    fireEvent.submit(screen.getByLabelText('Profile name').closest('form')!);
+    await waitFor(() => expect(api.ImportProfile).toHaveBeenCalledOnce());
+    expect((screen.getByRole('button', { name: 'Connect' }) as HTMLButtonElement).disabled).toBe(false);
+    fireEvent.click(screen.getByRole('button', { name: 'Connect' }));
+    expect(api.Connect).toHaveBeenCalledWith(profile.id);
+    await act(async () => finish(profile));
   });
   it('invalidates candidates on source edits and clears the backend preview on unmount', async () => {
     const view = render(<App/>); await screen.findByRole('button', { name: /My profile Xray configuration/ });
@@ -656,7 +709,7 @@ describe('desktop UI', () => {
     fireEvent.change(screen.getByLabelText('Xray configuration'), { target: { value: json } });
     fireEvent.submit(screen.getByLabelText('Profile name').closest('form')!);
     await waitFor(() => expect(api.ImportProfile).toHaveBeenCalledWith('Imported', json));
-    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    await screen.findByRole('heading', { name: 'Details' });
     await waitFor(() => expect((screen.getByRole('button', { name: 'Import profile' }) as HTMLButtonElement).disabled).toBe(false));
     openImport();
     expect((screen.getByLabelText('Xray configuration') as HTMLTextAreaElement).value).toBe('');
@@ -666,10 +719,10 @@ describe('desktop UI', () => {
     render(<App/>); await screen.findByRole('button', { name: /My profile Xray configuration/ });
     openImport();
     fireEvent.change(screen.getByLabelText('Xray configuration'), { target: { value: 'private-text' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Back' }));
     openImport();
     expect((screen.getByLabelText('Xray configuration') as HTMLTextAreaElement).value).toBe('');
-    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Back' }));
     fireEvent.click(screen.getByRole('button', { name: 'Delete profile' }));
     expect(api.DeleteProfile).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: 'Keep profile' }));

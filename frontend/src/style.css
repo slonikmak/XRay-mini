@@ -118,6 +118,15 @@ main { display: flex; flex-direction: column; min-height: 100vh; width: 100%; ma
 .profile-list { display: flex; flex-direction: column; gap: 12px; }
 .profiles-screen .add-profile { margin-top: 12px; }
 .profiles-screen .footer-note { display: grid; place-items: center; flex: 1; min-height: 80px; margin: 12px 0 0; }
+.import-screen { display: flex; flex: 1; flex-direction: column; gap: 12px; min-height: 0; }
+.import-screen > * { flex-shrink: 0; }
+.import-field { display: flex; flex-direction: column; gap: 4px; }
+.import-field label { color: var(--muted); font-size: 10px; font-weight: 500; line-height: 12px; }
+.import-config { flex: 1 1 144px; min-height: 144px; }
+.import-config textarea { flex: 1; min-height: 118px; }
+.import-screen .modal-description, .import-screen .subscription-actions, .import-screen > .alert { margin: 0; }
+.import-screen .privacy-note { margin: auto 0 0; }
+.import-screen .import-submit { width: 100%; padding: 12px; }
 .empty-message { color: var(--muted); font-size: 11px; line-height: 1.6; }
 .diagnostics-screen .log-list { flex: 1 1 0; }
 .log-list { min-height: 180px; max-height: calc(100vh - 96px); overflow: auto; border-radius: 10px; background: var(--card); }
