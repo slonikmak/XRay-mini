@@ -220,8 +220,11 @@ describe('desktop UI', () => {
     expect(api.Connect).not.toHaveBeenCalled();
     expect(api.Disconnect).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: 'Back' }));
-    expect(screen.getByText('Selected:', { exact: false }).textContent).toContain('Other profile');
-    expect(screen.getByText('Selected:', { exact: false }).textContent).toContain('My profile');
+    const activeInfo = document.querySelector('.active-profile') as HTMLElement;
+    expect(activeInfo.textContent).toContain('Other profile');
+    expect(activeInfo.textContent).toContain('My profile');
+    expect(within(activeInfo).getByText('Other profile').getAttribute('title')).toBe('Other profile');
+    expect(within(activeInfo).getByText('My profile').getAttribute('title')).toBe('My profile');
     fireEvent.click(screen.getByRole('button', { name: 'Disconnect' }));
     const cleanup = await screen.findByRole('button', { name: 'Finishing cleanup…' });
     expect((cleanup as HTMLButtonElement).disabled).toBe(true);
@@ -664,6 +667,32 @@ describe('desktop UI', () => {
     act(() => notify({ ...initialStatus, revision: 1, state: 'Error', processState: 'stopping', sessionId: 'owned', profileId: profile.id, message }));
     expect(messages.firstElementChild?.textContent).toBe(message);
     expect(messages.scrollTop).toBe(0);
+    expect(screen.getByRole('button', { name: 'Retry stop' })).toBeTruthy();
+  });
+  it('keeps a failed stop request visible above an existing refresh error', async () => {
+    const running = { ...initialStatus, revision: 1, state: 'Connected', processState: 'running', sessionId: 'owned', profileId: profile.id };
+    vi.mocked(api.GetStatus).mockResolvedValue(running);
+    vi.mocked(api.ListProfiles).mockResolvedValueOnce([profile]).mockRejectedValue(new Error('profile read failed'));
+    vi.mocked(api.Disconnect).mockRejectedValue(new Error('Stop request failed'));
+    render(<App/>); await screen.findByRole('button', { name: /My profile Active profile/ });
+    fireEvent.focus(window);
+    await screen.findByText(/Unable to refresh desktop state/);
+    const messages = document.querySelector('.status-messages') as HTMLElement;
+    messages.scrollTop = 100;
+    fireEvent.click(screen.getByRole('button', { name: 'Disconnect' }));
+    await screen.findByText('Stop request failed');
+    expect(messages.firstElementChild?.textContent).toBe('Stop request failed');
+    expect(messages.scrollTop).toBe(0);
+  });
+  it('opens the complete session error from the home screen with the keyboard', async () => {
+    const message = 'Xray exited unexpectedly; temporary configuration cleanup failed; use Retry stop';
+    vi.mocked(api.GetStatus).mockResolvedValue({ ...initialStatus, state: 'Error', processState: 'stopped', sessionId: 'owned', profileId: profile.id, message });
+    render(<App/>);
+    const details = await screen.findByRole('button', { name: `${message} Open details` });
+    details.focus();
+    await userEvent.keyboard('{Enter}');
+    expect(screen.getByRole('heading', { name: 'Details' })).toBeTruthy();
+    expect(screen.getByRole('alert').textContent).toBe(message);
     expect(screen.getByRole('button', { name: 'Retry stop' })).toBeTruthy();
   });
   it('applies status without waiting for a pending profile read', async () => {

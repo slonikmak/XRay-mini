@@ -80,6 +80,9 @@ export default function App() {
     if (screen !== 'home' && status.state === 'Error' && status.message && messagesRef.current) messagesRef.current.scrollTop = 0;
   }, [screen, status.state, status.message]);
   useEffect(() => {
+    if (screen === 'home' && connectionError && messagesRef.current) messagesRef.current.scrollTop = 0;
+  }, [screen, connectionError]);
+  useEffect(() => {
     if (screen === 'import' && error && importFormRef.current) importFormRef.current.scrollTop = 0;
   }, [screen, error]);
 
@@ -228,32 +231,33 @@ export default function App() {
   const statusLabel = !statusKnown ? statusWaiting ? 'Checking status…' : 'Status unavailable' : starting ? 'Connecting' : status.state === 'Error' ? status.state : disconnecting ? 'Disconnecting' : checkFailed && status.state !== 'Degraded' ? 'Check failed' : status.state;
   const modalStop = <>{active && <div><button type="button" className="secondary" aria-label={loadingSubscription ? `${connectionLabel} during loading` : undefined} disabled={connectionDisabled} onClick={() => { void toggleConnection(); }}>{connectionLabel}</button>{status.message && <p role="status">{status.message}</p>}</div>}{connectionError && <div className="alert error" role="alert">{connectionError}</div>}</>;
   const activeProfile = profiles.find(profile => profile.id === status.profileId);
+  const statusDetail = !statusKnown ? statusWaiting ? 'Waiting for desktop status.' : 'Desktop status is unavailable.' : status.message || (status.processState === 'stopped' ? 'Local proxy is stopped' : 'Process status and network reachability are checked separately.');
   const logsUnavailable = logsState === 'unavailable' || (logsState === 'ready' && !logs.length && (backendUnavailable || statusReadState === 'unavailable'));
   const logsLoading = logsState === 'loading' || (logsState === 'ready' && !logs.length && statusReadState === 'loading');
   const logCount = !logsUnavailable && !logsLoading ? logs.length : '–';
   const openProfiles = (from: 'home' | 'details') => { setProfilesBack(from); setScreen('profiles'); };
   const openImport = () => { setError(''); setImportBack(screen === 'profiles' ? 'profiles' : 'details'); setScreen('import'); };
   const importButton = <button className="add-profile" disabled={!available || !!busy || backendUnavailable} onClick={openImport}><Icon name="plus"/>Import profile</button>;
-  const profileCard = (profile: Profile) => <><span className="profile-icon"><Icon name="shield"/></span><span className="profile-text"><strong>{profile.name}</strong><small>{active && status.profileId === profile.id ? 'Active profile' : 'Xray configuration'}</small></span></>;
+  const profileCard = (profile: Profile) => <><span className="profile-icon"><Icon name="shield"/></span><span className="profile-text"><strong title={profile.name}>{profile.name}</strong><small>{active && status.profileId === profile.id ? 'Active profile' : 'Xray configuration'}</small></span></>;
 
   return <div className="app-shell">
     <main>
       {screen === 'home' ? <header className="home-header"><span className={`status-pill ${ready ? 'good' : ''}`}><span className="small-dot"/>{statusLabel}</span><button className="icon-button header-button" aria-label="Open details" onClick={() => setScreen('details')}><Icon name="info"/></button></header> :
       <header className="screen-header"><button className="icon-button header-button" aria-label="Back" disabled={screen === 'import' && !!busy} onClick={() => screen === 'import' ? closeImport() : setScreen(screen === 'profiles' ? profilesBack : screen === 'diagnostics' ? 'details' : 'home')}><Icon name="back"/></button><h1>{screen === 'details' ? 'Details' : screen === 'profiles' ? 'Profiles' : screen === 'import' ? 'Import a profile' : 'Diagnostics'}</h1>{screen === 'profiles' && <span className="header-count">{profiles.length}</span>}{screen === 'diagnostics' && <span className="header-count">{logCount}</span>}</header>}
-      <div className="status-messages" ref={messagesRef}>
+      <div className={`status-messages ${screen === 'home' ? 'home-messages' : ''}`} ref={messagesRef}>
         {screen !== 'home' && status.state === 'Error' && status.message && <div className="alert error" role="alert">{status.message}</div>}
         {!available && <div className="bridge-banner" role="status"><strong>Desktop bridge unavailable</strong><span>This is a browser preview. Open the Wails desktop app to import profiles and run Xray.</span></div>}
+        {connectionError && !modal && <div className="alert error" role="alert">{connectionError}</div>}
         {syncError && <div className="alert error" role="alert">{syncError}<button onClick={() => { void refresh(true); }}>Retry</button></div>}
         {error && !modal && screen !== 'import' && <div className="alert error" role="alert">{error}</div>}
-        {connectionError && !modal && <div className="alert error" role="alert">{connectionError}</div>}
         {notice && <div className="alert notice" role="status">{notice}</div>}
       </div>
       {screen !== 'home' && active && <div className="session-action"><span>Active: {activeProfile?.name || 'Profile unavailable'}</span><button className="secondary" aria-label={screen === 'import' && loadingSubscription ? `${connectionLabel} during loading` : undefined} disabled={connectionDisabled} onClick={() => { void toggleConnection(); }}>{connectionLabel}</button></div>}
       {screen === 'import' && !active && !!busy && <div className="session-action"><span>Selected: {selected?.name || 'No profile selected'}</span><button className="secondary" disabled={connectionDisabled} onClick={() => { void toggleConnection(); }}>{connectionLabel}</button></div>}
-      {screen === 'home' && <div className="home-screen">
+      {screen === 'home' && <div className="home-screen"><div className="home-content">
         {selected ? <button className="profile selected" onClick={() => openProfiles('home')}>{profileCard(selected)}<Icon name="arrow"/></button> :
           <button className="profile empty-profile" onClick={() => openProfiles('home')}><span className="profile-icon"><Icon name="plus"/></span><span className="profile-text"><strong>No profile selected</strong><small>Import a profile to get started</small></span><Icon name="arrow"/></button>}
-        {active && status.profileId !== selectedId && <p className="active-profile">Selected: <strong>{selected?.name || 'None'}</strong> · Active: <strong>{activeProfile?.name || 'Unavailable'}</strong></p>}
+        {active && status.profileId !== selectedId && <p className="active-profile"><span>Selected: <strong title={selected?.name || 'None'}>{selected?.name || 'None'}</strong></span> · <span>Active: <strong title={activeProfile?.name || 'Unavailable'}>{activeProfile?.name || 'Unavailable'}</strong></span></p>}
         <section className="connection-card">
         <button type="button" className={`connection-symbol ${ready ? 'active' : ''}`} aria-label={connectionLabel} title={connectionLabel} disabled={connectionDisabled} onClick={() => { void toggleConnection(); }}><Icon name="power"/></button>
         {statusKnown && (transition || recovery || !!connectionBusy || (active && status.processState === 'stopped') || (status.processState === 'running' && !healthy)) && <span className="connection-action" aria-hidden="true">{connectionLabel}</span>}
@@ -261,8 +265,8 @@ export default function App() {
         <p className="hero-subtitle">SOCKS5 127.0.0.1:10808 · HTTP 127.0.0.1:10809</p>
         </section>
         <div className="state-grid"><div><span className="state-label">Xray process</span><strong><span className={`small-dot ${statusKnown && status.processState === 'running' ? 'good-dot' : ''}`}/>{statusKnown ? processLabels[status.processState] : statusWaiting ? 'Checking…' : 'Unavailable'}</strong></div><div><span className="state-label">Network check</span><strong><span className={`small-dot ${healthy ? 'good-dot' : ''}`}/>{!statusKnown ? statusWaiting ? 'Checking…' : 'Unavailable' : status.processState === 'running' ? healthLabels[status.networkHealth] : 'Not verified'}</strong></div></div>
-        <p className="status-detail">{!statusKnown ? statusWaiting ? 'Waiting for desktop status.' : 'Desktop status is unavailable.' : status.message || (status.processState === 'stopped' ? 'Local proxy is stopped' : 'Process status and network reachability are checked separately.')}</p>
-      </div>}
+        {statusKnown && status.state === 'Error' ? <button type="button" className="status-detail status-detail-button" title={statusDetail} aria-label={`${statusDetail} Open details`} onClick={() => setScreen('details')}>{statusDetail}</button> : <p className="status-detail" title={statusDetail}>{statusDetail}</p>}
+      </div></div>}
       {screen === 'details' && <div className="detail-screen">
       <span className="eyebrow">Local endpoints</span>
       <section className="endpoints" aria-label="Local proxy addresses">

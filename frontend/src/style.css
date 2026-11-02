@@ -54,7 +54,10 @@ main { display: flex; flex-direction: column; height: 100%; min-height: 0; width
 .status-pill.good { color: var(--accent); }
 .status-pill.good .small-dot { background: var(--accent); }
 .home-screen, .profiles-screen, .diagnostics-screen { display: flex; flex-direction: column; flex: 1; min-height: 0; }
-.home-screen { gap: 16px; overflow-y: auto; overscroll-behavior: contain; }
+.home-screen { container: home / size; overflow: clip; }
+.home-content { display: flex; flex: 1; flex-direction: column; gap: 16px; min-height: 0; }
+.home-content > * { flex-shrink: 0; }
+.home-screen .profile:focus-visible { outline-offset: -3px; }
 .profile { display: flex; align-items: center; gap: 10px; width: 100%; min-width: 0; padding: 12px; border: 0; border-radius: 10px; background: var(--card); text-align: left; }
 .profile.selected { background: var(--accent-dim); }
 .profile > svg:last-child { width: 14px; height: 14px; color: var(--dim); }
@@ -66,9 +69,11 @@ main { display: flex; flex-direction: column; height: 100%; min-height: 0; width
 .profile-text { min-width: 0; flex: 1; }
 .profile strong { display: block; font-size: 12px; font-weight: 500; overflow-wrap: anywhere; }
 .profile small { display: block; margin-top: 4px; color: var(--muted); font-size: 10px; overflow-wrap: anywhere; }
-.active-profile { margin: 0; color: var(--muted); font-size: 10px; line-height: 1.5; overflow-wrap: anywhere; }
-.active-profile strong { color: var(--txt); font-weight: 500; }
-.connection-card { display: flex; flex: 1; flex-direction: column; align-items: center; justify-content: center; min-height: 200px; text-align: center; }
+.home-screen .profile-text strong { display: -webkit-box; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.active-profile { display: flex; gap: 4px; margin: 0; color: var(--muted); font-size: 10px; line-height: 1.5; white-space: nowrap; }
+.active-profile > span { display: flex; flex: 0 1 auto; gap: 3px; min-width: 0; }
+.active-profile strong { display: block; min-width: 0; overflow: hidden; color: var(--txt); font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
+.connection-card { display: flex; flex: 1; flex-direction: column; align-items: center; justify-content: center; min-height: 0; text-align: center; }
 .connection-symbol { position: relative; display: grid; place-items: center; flex: none; width: 96px; height: 96px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--muted); }
 .connection-symbol::before, .connection-symbol::after { position: absolute; content: ''; border-radius: 50%; }
 .connection-symbol::before { inset: 4px; border: 1px solid var(--border); }
@@ -87,7 +92,9 @@ main { display: flex; flex-direction: column; height: 100%; min-height: 0; width
 .state-label, .eyebrow { display: block; color: var(--dim); font-size: 10px; line-height: 12px; }
 .state-label { margin-bottom: 8px; text-align: center; }
 .state-grid strong { display: flex; justify-content: center; align-items: center; gap: 6px; font-size: 11px; font-weight: 500; line-height: 13px; }
-.status-detail { margin: 0; color: var(--dim); font-size: 10px; line-height: 1.4; text-align: center; overflow-wrap: anywhere; }
+.status-detail { display: -webkit-box; overflow: hidden; margin: 0; color: var(--dim); font-size: 10px; line-height: 1.4; text-align: center; overflow-wrap: anywhere; -webkit-box-orient: vertical; -webkit-line-clamp: 3; }
+.status-detail-button { width: 100%; padding: 0; border: 0; background: transparent; text-decoration: underline dotted; text-underline-offset: 3px; }
+.status-detail-button:focus-visible { outline-offset: -2px; }
 .detail-screen { display: flex; flex: 1; flex-direction: column; gap: 4px; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
 .detail-screen > * { flex-shrink: 0; }
 .detail-screen > .eyebrow:not(:first-child) { margin-top: 8px; }
@@ -140,6 +147,7 @@ main { display: flex; flex-direction: column; height: 100%; min-height: 0; width
 .log-level.error { color: #f5aaa7; }
 .log-level.warning, .log-level.warn { color: #e2bd77; }
 .status-messages { flex: 0 1 auto; min-height: 0; max-height: 35%; overflow-y: auto; overscroll-behavior: contain; }
+.home-messages { max-height: 20%; }
 .bridge-banner { display: flex; flex-direction: column; gap: 5px; margin-bottom: 12px; padding: 11px; border: 1px solid #4b4839; border-radius: 8px; background: #29281e; color: #d0c9ae; font-size: 11px; line-height: 1.5; }
 .bridge-banner strong { color: #eadcac; }
 .alert { margin: 0 0 12px; padding: 10px 12px; border-radius: 8px; font-size: 11px; line-height: 1.5; overflow-wrap: anywhere; }
@@ -173,6 +181,15 @@ input[type=checkbox] { width: auto; margin: 0 9px 0 0; vertical-align: middle; a
 .status-pill, .header-button, .profile, .endpoints, .profile-panel, .profile-actions .secondary, .text-danger, .add-profile, .settings-card, .diagnostics-link, .log-list { box-shadow: inset 0 0 0 1px var(--border); }
 .profile.selected { box-shadow: inset 0 0 0 1px #34564e; }
 .profile-panel .profile { box-shadow: none; }
+@container home (max-height: 420px) {
+  .home-content { gap: 8px; }
+  .home-content .profile { padding-top: 8px; padding-bottom: 8px; }
+  .home-content .profile-text strong { display: block; text-overflow: ellipsis; white-space: nowrap; }
+  .connection-symbol { width: 64px; height: 64px; }
+  .connection-card h1 { margin: 4px 0; font-size: 16px; line-height: 20px; }
+  .home-content .state-grid { padding-top: 4px; }
+  .status-detail { -webkit-line-clamp: 2; }
+}
 @media (max-width: 360px) {
   .log-entry { grid-template-columns: minmax(0, max-content) 5px minmax(0, 1fr); }
   dialog { padding: 20px; }
