@@ -208,8 +208,13 @@ export default function App() {
     catch { if (alive.current) setError(`Clipboard unavailable. Copy manually: ${address}`); }
   }
 
+  const disconnecting = status.state === 'Disconnecting' || status.processState === 'stopping' || (active && status.processState === 'stopped') || (active && connectionBusy === 'Stopping');
+  const starting = !active && connectionBusy === 'Starting';
   const healthy = statusKnown && status.state !== 'Error' && status.processState === 'running' && status.networkHealth === 'healthy';
-  const heading = !available ? 'Desktop unavailable' : statusWaiting ? 'Checking status…' : !statusKnown ? 'Status unavailable' : status.state === 'Error' ? 'Connection needs attention' : status.processState === 'running' ? 'Proxy is running' : status.processState === 'preparing' ? 'Starting proxy…' : transition ? 'Stopping proxy…' : active ? 'Finishing cleanup…' : 'Proxy is off';
+  const ready = healthy && !disconnecting;
+  const checkFailed = statusKnown && status.state !== 'Error' && !disconnecting && status.processState === 'running' && status.networkHealth === 'unhealthy';
+  const heading = !statusKnown ? statusWaiting ? 'Checking status…' : 'Status unavailable' : starting ? 'Starting proxy…' : status.state === 'Error' ? 'Connection error' : disconnecting ? 'Disconnecting…' : status.processState === 'preparing' ? 'Starting proxy…' : checkFailed ? 'Connection check failed' : ready ? 'Proxy is ready' : status.processState === 'running' ? status.networkHealth === 'checking' ? 'Checking connection…' : 'Connection not verified' : 'Proxy is off';
+  const statusLabel = !statusKnown ? statusWaiting ? 'Checking status…' : 'Status unavailable' : starting ? 'Connecting' : status.state === 'Error' ? status.state : disconnecting ? 'Disconnecting' : checkFailed && status.state !== 'Degraded' ? 'Check failed' : status.state;
   const modalStop = <>{active && <div><button type="button" className="secondary" aria-label={loadingSubscription ? `${connectionLabel} during loading` : undefined} disabled={connectionDisabled} onClick={() => { void toggleConnection(); }}>{connectionLabel}</button>{status.message && <p role="status">{status.message}</p>}</div>}{connectionError && <div className="alert error" role="alert">{connectionError}</div>}</>;
   const activeProfile = profiles.find(profile => profile.id === status.profileId);
   const logsUnavailable = logsState === 'unavailable' || (logsState === 'ready' && !logs.length && (backendUnavailable || statusReadState === 'unavailable'));
@@ -222,7 +227,7 @@ export default function App() {
 
   return <div className="app-shell">
     <main>
-      {screen === 'home' ? <header className="home-header"><span className={`status-pill ${healthy ? 'good' : ''}`}><span className="small-dot"/>{!available ? 'Desktop required' : statusWaiting ? 'Checking status…' : !statusKnown ? 'Status unavailable' : status.state}</span><button className="icon-button header-button" aria-label="Open details" onClick={() => setScreen('details')}><Icon name="info"/></button></header> :
+      {screen === 'home' ? <header className="home-header"><span className={`status-pill ${ready ? 'good' : ''}`}><span className="small-dot"/>{statusLabel}</span><button className="icon-button header-button" aria-label="Open details" onClick={() => setScreen('details')}><Icon name="info"/></button></header> :
       <header className="screen-header"><button className="icon-button header-button" aria-label="Back" onClick={() => setScreen(screen === 'profiles' ? profilesBack : screen === 'diagnostics' ? 'details' : 'home')}><Icon name="back"/></button><h1>{screen === 'details' ? 'Details' : screen === 'profiles' ? 'Profiles' : 'Diagnostics'}</h1>{screen === 'profiles' && <span className="header-count">{profiles.length}</span>}{screen === 'diagnostics' && <span className="header-count">{logCount}</span>}</header>}
       {!available && <div className="bridge-banner" role="status"><strong>Desktop bridge unavailable</strong><span>This is a browser preview. Open the Wails desktop app to import profiles and run Xray.</span></div>}
       {syncError && <div className="alert error" role="alert">{syncError}<button onClick={() => { void refresh(true); }}>Retry</button></div>}
@@ -236,7 +241,7 @@ export default function App() {
           <button className="profile empty-profile" onClick={() => openProfiles('home')}><span className="profile-icon"><Icon name="plus"/></span><span className="profile-text"><strong>No profile selected</strong><small>Import a profile to get started</small></span><Icon name="arrow"/></button>}
         {active && status.profileId !== selectedId && <p className="active-profile">Selected: <strong>{selected?.name || 'None'}</strong> · Active: <strong>{activeProfile?.name || 'Unavailable'}</strong></p>}
         <section className="connection-card">
-        <button type="button" className={`connection-symbol ${healthy ? 'active' : ''}`} aria-label={connectionLabel} title={connectionLabel} disabled={connectionDisabled} onClick={() => { void toggleConnection(); }}><Icon name="power"/></button>
+        <button type="button" className={`connection-symbol ${ready ? 'active' : ''}`} aria-label={connectionLabel} title={connectionLabel} disabled={connectionDisabled} onClick={() => { void toggleConnection(); }}><Icon name="power"/></button>
         {statusKnown && (transition || recovery || !!connectionBusy || (active && status.processState === 'stopped') || (status.processState === 'running' && !healthy)) && <span className="connection-action" aria-hidden="true">{connectionLabel}</span>}
         <h1>{heading}</h1>
         <p className="hero-subtitle">SOCKS5 127.0.0.1:10808 · HTTP 127.0.0.1:10809</p>
