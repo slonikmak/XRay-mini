@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import App from './App';
 import { desktop, initialStatus, type DesktopAPI } from './bridge';
 vi.mock('./bridge', async (importOriginal) => ({ ...await importOriginal<typeof import('./bridge')>(), desktop: vi.fn() }));
@@ -31,6 +32,150 @@ function openImport() {
   fireEvent.click(screen.getByRole('button', { name: 'Import profile' }));
 }
 describe('desktop UI', () => {
+  it('uses one keyboard-operable power circle and disables it without a profile', async () => {
+    const user = userEvent.setup();
+    const view = render(<App/>);
+    await screen.findByRole('button', { name: /My profile Xray configuration/ });
+    expect(screen.getByRole('heading', { name: 'Proxy is off' })).toBeTruthy();
+    expect(document.querySelector('.connection-action')).toBeNull();
+    expect(screen.getByText('SOCKS5 127.0.0.1:10808 · HTTP 127.0.0.1:10809')).toBeTruthy();
+    const power = screen.getByRole('button', { name: 'Connect' });
+    expect(document.querySelectorAll('.connection-symbol')).toHaveLength(1);
+    power.focus();
+    expect(document.activeElement).toBe(power);
+    await user.keyboard('{Enter}');
+    expect(api.Connect).toHaveBeenCalledWith(profile.id);
+    view.unmount();
+    vi.mocked(api.ListProfiles).mockResolvedValue([]);
+    render(<App/>);
+    await screen.findByRole('button', { name: /No profile selected/ });
+    expect((screen.getByRole('button', { name: 'Connect' }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('updates the process and network indicators independently from status events', async () => {
+    let notify!: Parameters<DesktopAPI['SubscribeStatus']>[0];
+    vi.mocked(api.SubscribeStatus).mockImplementation(callback => { notify = callback; return vi.fn(); });
+    render(<App/>);
+    await screen.findByRole('button', { name: /My profile Xray configuration/ });
+    const running = { ...initialStatus, revision: 1, state: 'Connected', processState: 'running', networkHealth: 'healthy', sessionId: 'owned', profileId: profile.id };
+    act(() => notify(running));
+    expect(screen.getByRole('heading', { name: 'Proxy is running' })).toBeTruthy();
+    expect(document.querySelector('.connection-action')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Disconnect' }).classList.contains('active')).toBe(true);
+    expect(screen.getByText('Running').querySelector('.good-dot')).toBeTruthy();
+    expect(screen.getByText('Reachable').querySelector('.good-dot')).toBeTruthy();
+    expect(document.querySelector('.status-pill.good')).toBeTruthy();
+    act(() => notify({ ...running, revision: 2, networkHealth: 'unhealthy' }));
+    expect(screen.getByText('Running').querySelector('.good-dot')).toBeTruthy();
+    expect(screen.getByText('Check failed').querySelector('.good-dot')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Disconnect' }).classList.contains('active')).toBe(false);
+    expect(document.querySelector('.connection-action')?.textContent).toBe('Disconnect');
+    expect(document.querySelector('.status-pill.good')).toBeNull();
+    act(() => notify({ ...running, revision: 3, state: 'Disconnecting', processState: 'stopped' }));
+    expect((screen.getByRole('button', { name: 'Finishing cleanup…' }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByText('Not running').querySelector('.good-dot')).toBeNull();
+    expect(screen.getByText('Not verified').querySelector('.good-dot')).toBeNull();
+    expect(screen.queryByText('Reachable')).toBeNull();
+  });
+
+  it('waits for a first backend snapshot before claiming the proxy is stopped', async () => {
+    let finishStatus!: (status: typeof initialStatus) => void;
+    vi.mocked(api.GetStatus).mockReturnValue(new Promise(resolve => { finishStatus = resolve; }));
+    render(<App/>);
+    expect(screen.getByRole('heading', { name: 'Checking status…' })).toBeTruthy();
+    expect(screen.getByText('Waiting for desktop status.')).toBeTruthy();
+    expect(screen.getAllByText('Checking…')).toHaveLength(2);
+    expect((screen.getByRole('button', { name: 'Connect' }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.queryByText('Disconnected')).toBeNull();
+    expect(screen.queryByText('Not running')).toBeNull();
+    expect(screen.queryByText('Local proxy is stopped')).toBeNull();
+    expect(document.querySelector('.good-dot')).toBeNull();
+    await act(async () => finishStatus({ ...initialStatus, revision: 1, state: 'Connected', processState: 'running', networkHealth: 'healthy', sessionId: 'owned', profileId: profile.id }));
+    expect(await screen.findByRole('heading', { name: 'Proxy is running' })).toBeTruthy();
+    expect((screen.getByRole('button', { name: 'Disconnect' }) as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it('shows a failed first read honestly and accepts a later retained-session recovery event', async () => {
+    let notify!: Parameters<DesktopAPI['SubscribeStatus']>[0];
+    vi.mocked(api.SubscribeStatus).mockImplementation(callback => { notify = callback; return vi.fn(); });
+    vi.mocked(api.GetStatus).mockRejectedValue(new Error('status unavailable'));
+    render(<App/>);
+    expect(await screen.findByRole('heading', { name: 'Status unavailable' })).toBeTruthy();
+    expect(screen.getByText('Desktop status is unavailable.')).toBeTruthy();
+    expect(screen.queryByText('Disconnected')).toBeNull();
+    expect(screen.queryByText('Not running')).toBeNull();
+    expect(screen.queryByText('Local proxy is stopped')).toBeNull();
+    expect((screen.getByRole('button', { name: 'Connect' }) as HTMLButtonElement).disabled).toBe(true);
+    act(() => notify({ ...initialStatus, revision: 1, state: 'Error', processState: 'stopping', sessionId: 'retained', profileId: profile.id }));
+    const retry = screen.getByRole('button', { name: 'Retry stop' }) as HTMLButtonElement;
+    expect(retry.disabled).toBe(false);
+    fireEvent.click(retry);
+    await waitFor(() => expect(api.Disconnect).toHaveBeenCalledOnce());
+  });
+
+  it('shows the power action during cancellation, a pending stop, retained error and cleanup', async () => {
+    let notify!: Parameters<DesktopAPI['SubscribeStatus']>[0];
+    let finishStop!: (status: typeof initialStatus) => void;
+    const starting = { ...initialStatus, revision: 1, state: 'Connecting', processState: 'preparing', sessionId: 'owned', profileId: profile.id };
+    vi.mocked(api.SubscribeStatus).mockImplementation(callback => { notify = callback; return vi.fn(); });
+    vi.mocked(api.GetStatus).mockResolvedValue(starting);
+    vi.mocked(api.Disconnect).mockReturnValue(new Promise(resolve => { finishStop = resolve; }));
+    render(<App/>);
+    const cancel = await screen.findByRole('button', { name: 'Cancel startup' });
+    expect(document.querySelector('.connection-action')?.textContent).toBe('Cancel startup');
+    fireEvent.click(cancel);
+    expect(document.querySelector('.connection-action')?.textContent).toBe('Stopping…');
+    expect((screen.getByRole('button', { name: 'Stopping…' }) as HTMLButtonElement).disabled).toBe(true);
+    await act(async () => finishStop({ ...starting, revision: 2, state: 'Error', processState: 'stopping' }));
+    expect(screen.getByRole('button', { name: 'Retry stop' })).toBeTruthy();
+    expect(document.querySelector('.connection-action')?.textContent).toBe('Retry stop');
+    act(() => notify({ ...starting, revision: 3, state: 'Disconnecting', processState: 'stopped' }));
+    expect((screen.getByRole('button', { name: 'Finishing cleanup…' }) as HTMLButtonElement).disabled).toBe(true);
+    expect(document.querySelector('.connection-action')?.textContent).toBe('Finishing cleanup…');
+    expect(document.querySelectorAll('.connection-symbol')).toHaveLength(1);
+  });
+
+  it('shows the Details footer version and colors its dot only for healthy running status', async () => {
+    let notify!: Parameters<DesktopAPI['SubscribeStatus']>[0];
+    vi.mocked(api.SubscribeStatus).mockImplementation(callback => { notify = callback; return vi.fn(); });
+    render(<App/>);
+    await screen.findByRole('button', { name: /My profile Xray configuration/ });
+    openDetails();
+    const footer = screen.getByText(/Local-first · Yours only · Xray Mini 0\.1/);
+    const dot = footer.querySelector('.small-dot')!;
+    expect(dot.classList.contains('good-dot')).toBe(false);
+    const running = { ...initialStatus, revision: 1, state: 'Connected', processState: 'running', networkHealth: 'healthy', sessionId: 'owned', profileId: profile.id };
+    act(() => notify(running));
+    expect(dot.classList.contains('good-dot')).toBe(true);
+    act(() => notify({ ...running, revision: 2, networkHealth: 'unhealthy' }));
+    expect(dot.classList.contains('good-dot')).toBe(false);
+    act(() => notify({ ...running, revision: 3, state: 'Error' }));
+    expect(dot.classList.contains('good-dot')).toBe(false);
+  });
+
+  it('marks only the actual passed check as a successful diagnostic entry', async () => {
+    const stamp = '2026-10-30T12:34:56Z';
+    const passed = 'HTTP proxy check passed; other destinations may differ';
+    vi.mocked(api.GetRecentLogs).mockResolvedValue([
+      { time: stamp, level: 'info', message: 'Preparing local proxy' },
+      { time: stamp, level: 'info', message: passed },
+      { time: stamp, level: 'error', message: 'Proxy check failed' },
+    ]);
+    render(<App/>);
+    await screen.findByRole('button', { name: /My profile Xray configuration/ });
+    openDetails();
+    fireEvent.click(screen.getByRole('button', { name: /Diagnostics/ }));
+    const prepared = (await screen.findByText('Preparing local proxy')).closest('.log-entry')!;
+    const successful = screen.getByText(passed).closest('.log-entry')!;
+    const failed = screen.getByText('Proxy check failed').closest('.log-entry')!;
+    expect(prepared.querySelector('.good-dot')).toBeNull();
+    expect(successful.querySelector('.good-dot')).toBeTruthy();
+    expect(failed.querySelector('.good-dot')).toBeNull();
+    expect(within(failed as HTMLElement).getByLabelText('error')).toBeTruthy();
+    expect(failed.textContent).toContain('error');
+    expect(successful.querySelector('time')?.getAttribute('datetime')).toBe(stamp);
+  });
+
   it('keeps the active profile until cleanup and connects the newly selected profile afterwards', async () => {
     const other = { ...profile, id: 'local-2', name: 'Other profile' };
     let notify!: Parameters<DesktopAPI['SubscribeStatus']>[0];
@@ -45,8 +190,8 @@ describe('desktop UI', () => {
     expect(api.Connect).not.toHaveBeenCalled();
     expect(api.Disconnect).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: 'Back' }));
-    expect(screen.getByText('Active profile:', { exact: false }).textContent).toContain('My profile');
-    expect(screen.getByText('Selected profile', { exact: false }).textContent).toContain('Other profile');
+    expect(screen.getByText('Selected:', { exact: false }).textContent).toContain('Other profile');
+    expect(screen.getByText('Selected:', { exact: false }).textContent).toContain('My profile');
     fireEvent.click(screen.getByRole('button', { name: 'Disconnect' }));
     const cleanup = await screen.findByRole('button', { name: 'Finishing cleanup…' });
     expect((cleanup as HTMLButtonElement).disabled).toBe(true);
@@ -311,7 +456,7 @@ describe('desktop UI', () => {
     expect(api.SubscribeStatus).toHaveBeenCalledOnce();
     expect(vi.mocked(api.SubscribeStatus).mock.invocationCallOrder[0]).toBeLessThan(vi.mocked(api.GetStatus).mock.invocationCallOrder[0]);
     act(() => notify({ ...initialStatus, revision: 4, state: 'Connected', processState: 'running', networkHealth: 'healthy' }));
-    expect(screen.getByText('Proxy is ready.')).toBeTruthy();
+    expect(screen.getByText('Proxy is running')).toBeTruthy();
     fireEvent.focus(window);
     expect(api.SubscribeStatus).toHaveBeenCalledOnce();
     view.unmount();
@@ -326,7 +471,7 @@ describe('desktop UI', () => {
     render(<App/>);
     await screen.findByRole('button', { name: /My profile Xray configuration/ });
     expect(api.SubscribeStatus).toHaveBeenCalledOnce();
-    expect(screen.getByText('Proxy is ready.')).toBeTruthy();
+    expect(screen.getByText('Proxy is running')).toBeTruthy();
   });
   it('loads metadata, requires a selection and imports only the chosen candidate', async () => {
     render(<App/>); await screen.findByRole('button', { name: /My profile Xray configuration/ });
@@ -407,7 +552,7 @@ describe('desktop UI', () => {
     vi.mocked(api.GetStatus).mockResolvedValue({ ...initialStatus, state: 'Error', processState: 'error', message });
     render(<App/>);
     await screen.findByText(message);
-    expect(screen.getByRole('heading', { name: 'Connection needs attention.' })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Connection needs attention' })).toBeTruthy();
     openDetails();
     expect((screen.getByRole('button', { name: 'Import profile' }) as HTMLButtonElement).disabled).toBe(true);
     expect(screen.queryByText('Desktop bridge unavailable')).toBeNull();
@@ -417,7 +562,7 @@ describe('desktop UI', () => {
     vi.mocked(api.ListProfiles).mockReturnValue(new Promise(resolve => { resolveProfiles = resolve; }));
     vi.mocked(api.GetStatus).mockResolvedValue({ ...initialStatus, revision: 1, state: 'Connected', processState: 'running', networkHealth: 'healthy' });
     render(<App/>);
-    await screen.findByText('Proxy is ready.');
+    await screen.findByText('Proxy is running');
     await act(async () => resolveProfiles([profile]));
   });
   it('recognizes a late native bridge even when backend startup failed', async () => {
@@ -434,6 +579,10 @@ describe('desktop UI', () => {
   it('shows an honest empty browser preview without simulated profiles or network success', () => {
     vi.mocked(desktop).mockReturnValue(undefined); render(<App/>);
     expect(screen.getByText('Desktop bridge unavailable')).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Desktop unavailable' })).toBeTruthy();
+    expect(screen.queryByText('Disconnected')).toBeNull();
+    expect(screen.queryByText('Not running')).toBeNull();
+    expect(screen.queryByText('Local proxy is stopped')).toBeNull();
     expect(screen.queryByText('My profile')).toBeNull();
     expect(screen.queryByText('Reachable')).toBeNull();
     expect((screen.getByRole('button', { name: 'Connect' }) as HTMLButtonElement).disabled).toBe(true);
@@ -448,9 +597,9 @@ describe('desktop UI', () => {
   it('shows the first failed probe honestly even before the two-failure degraded threshold', async () => {
     vi.mocked(api.GetStatus).mockResolvedValue({ ...initialStatus, state: 'Connected', processState: 'running', networkHealth: 'unhealthy', profileId: profile.id });
     render(<App/>);
-    await screen.findByText('Xray is running.');
+    await screen.findByText('Proxy is running');
     expect(screen.getByText('Check failed')).toBeTruthy();
-    expect(screen.queryByText('Proxy is ready.')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Disconnect' }).classList.contains('active')).toBe(false);
     openDetails();
     expect((screen.getByRole('button', { name: 'Delete profile' }) as HTMLButtonElement).disabled).toBe(true);
   });
@@ -507,9 +656,9 @@ describe('desktop UI', () => {
     vi.mocked(api.SubscribeStatus).mockImplementation(callback => { notify = callback; return unsubscribe; });
     vi.mocked(api.GetStatus).mockResolvedValue({ ...initialStatus, revision: 2, state: 'Connected', processState: 'running', networkHealth: 'healthy', profileId: profile.id });
     const mounted = render(<App/>);
-    await screen.findByText('Proxy is ready.');
+    await screen.findByText('Proxy is running');
     act(() => notify({ ...initialStatus, revision: 1, state: 'Error', processState: 'error', networkHealth: 'unhealthy' }));
-    expect(screen.getByText('Proxy is ready.')).toBeTruthy();
+    expect(screen.getByText('Proxy is running')).toBeTruthy();
     fireEvent.focus(window);
     await waitFor(() => expect(api.GetStatus).toHaveBeenCalledTimes(3));
     mounted.unmount();
@@ -583,9 +732,9 @@ describe('desktop UI', () => {
     vi.mocked(api.GetStatus).mockReturnValue(new Promise(done => { resolve = done; }));
     render(<App/>);
     act(() => notify({ ...initialStatus, revision: 9, state: 'Connected', processState: 'running', networkHealth: 'healthy' }));
-    expect(screen.getByText('Proxy is ready.')).toBeTruthy();
+    expect(screen.getByText('Proxy is running')).toBeTruthy();
     await act(async () => resolve({ ...initialStatus, revision: 8 }));
-    expect(screen.getByText('Proxy is ready.')).toBeTruthy();
+    expect(screen.getByText('Proxy is running')).toBeTruthy();
   });
 
   it('allows cancellation after Connect acceptance while profile refresh is still blocked', async () => {

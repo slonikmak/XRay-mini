@@ -1,15 +1,15 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { desktop, initialStatus, type ImportPreview, type LogEntry, type Profile, type Status, type SubscriptionCandidate } from './bridge';
 
-type IconName = 'power' | 'plus' | 'copy' | 'shield' | 'arrow' | 'back' | 'settings' | 'check' | 'trash' | 'close';
+type IconName = 'power' | 'plus' | 'copy' | 'shield' | 'arrow' | 'back' | 'info' | 'check' | 'close';
 function Icon({ name }: { name: IconName }) {
   const paths: Record<IconName, ReactNode> = {
     power: <><path d="M12 3v9"/><path d="M6 5.5a9 9 0 1 0 12 0"/></>,
     plus: <path d="M12 5v14M5 12h14"/>, copy: <><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></>,
     shield: <><path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6l8-3Z"/><path d="m8 12 3 3 5-6"/></>,
     arrow: <path d="m9 5 7 7-7 7"/>, back: <path d="m15 18-6-6 6-6M9 12h11"/>,
-    settings: <><circle cx="12" cy="12" r="3"/><path d="M19 13.5v-3l-2-.6a7 7 0 0 0-.8-1.9l1-1.8-2.1-2.1-1.8 1a7 7 0 0 0-1.9-.8L10.5 2h-3l-.6 2.3a7 7 0 0 0-1.9.8l-1.8-1L1.1 6.2l1 1.8a7 7 0 0 0-.8 1.9L-1 10.5v3l2.3.6a7 7 0 0 0 .8 1.9l-1 1.8 2.1 2.1 1.8-1a7 7 0 0 0 1.9.8l.6 2.3h3l.6-2.3a7 7 0 0 0 1.9-.8l1.8 1 2.1-2.1-1-1.8a7 7 0 0 0 .8-1.9Z" transform="translate(2 0)"/></>,
-    check: <path d="m5 12 4 4L19 6"/>, trash: <><path d="M3 6h18M9 6V3h6v3M6 6l1 15h10l1-15M10 10v7M14 10v7"/></>,
+    info: <><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></>,
+    check: <path d="m5 12 4 4L19 6"/>,
     close: <path d="m6 6 12 12M6 18 18 6"/>,
   };
   return <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">{paths[name]}</svg>;
@@ -63,11 +63,13 @@ export default function App() {
   const logsRevision = useRef(0);
   const pollBusy = useRef(false);
   const selected = profiles.find(p => p.id === selectedId);
+  const statusKnown = available && statusReadState === 'ready';
+  const statusWaiting = available && statusReadState === 'loading';
   const active = !!status.sessionId || ['preparing', 'running', 'stopping'].includes(status.processState);
   const backendUnavailable = status.state === 'Error' && !status.sessionId && !status.profileId;
   const transition = status.processState === 'preparing' || status.processState === 'stopping';
   const recovery = active && status.state === 'Error';
-  const connectionDisabled = !available || !!connectionBusy || (!recovery && (status.processState === 'stopping' || (active && status.processState === 'stopped'))) || (!active && (!selected || !!syncError || backendUnavailable));
+  const connectionDisabled = !statusKnown || !!connectionBusy || (!recovery && (status.processState === 'stopping' || (active && status.processState === 'stopped'))) || (!active && (!selected || !!syncError || backendUnavailable));
   const connectionLabel = connectionBusy ? `${connectionBusy}…` : recovery ? 'Retry stop' : status.processState === 'stopping' ? 'Stopping…' : status.processState === 'preparing' ? 'Cancel startup' : active && status.processState === 'stopped' ? 'Finishing cleanup…' : active ? 'Disconnect' : 'Connect';
 
   useEffect(() => { document.documentElement.scrollTop = 0; document.body.scrollTop = 0; }, [screen]);
@@ -93,6 +95,7 @@ export default function App() {
     void refreshLogs();
     const version = ++revision.current;
     pollBusy.current = true;
+    if (alive.current) setStatusReadState(previous => previous === 'ready' ? previous : 'loading');
     try {
       // A failed or slow profile/log read must not hide the backend's safe status.
       const statusRequest = api.GetStatus().then(nextStatus => {
@@ -205,8 +208,8 @@ export default function App() {
     catch { if (alive.current) setError(`Clipboard unavailable. Copy manually: ${address}`); }
   }
 
-  const healthy = status.processState === 'running' && status.networkHealth === 'healthy';
-  const heading = !available ? 'Your connection, simplified.' : status.state === 'Error' ? 'Connection needs attention.' : healthy ? 'Proxy is ready.' : status.processState === 'running' ? 'Xray is running.' : transition ? 'One moment…' : 'Ready when you are.';
+  const healthy = statusKnown && status.state !== 'Error' && status.processState === 'running' && status.networkHealth === 'healthy';
+  const heading = !available ? 'Desktop unavailable' : statusWaiting ? 'Checking status…' : !statusKnown ? 'Status unavailable' : status.state === 'Error' ? 'Connection needs attention' : status.processState === 'running' ? 'Proxy is running' : status.processState === 'preparing' ? 'Starting proxy…' : transition ? 'Stopping proxy…' : active ? 'Finishing cleanup…' : 'Proxy is off';
   const modalStop = <>{active && <div><button type="button" className="secondary" aria-label={loadingSubscription ? `${connectionLabel} during loading` : undefined} disabled={connectionDisabled} onClick={() => { void toggleConnection(); }}>{connectionLabel}</button>{status.message && <p role="status">{status.message}</p>}</div>}{connectionError && <div className="alert error" role="alert">{connectionError}</div>}</>;
   const activeProfile = profiles.find(profile => profile.id === status.profileId);
   const logsUnavailable = logsState === 'unavailable' || (logsState === 'ready' && !logs.length && (backendUnavailable || statusReadState === 'unavailable'));
@@ -219,7 +222,7 @@ export default function App() {
 
   return <div className="app-shell">
     <main>
-      {screen === 'home' ? <header className="home-header"><span className={`status-pill ${healthy && status.state !== 'Error' ? 'good' : ''}`}><span className="small-dot"/>{!available ? 'Desktop required' : status.state}</span><button className="icon-button header-button" aria-label="Open details" onClick={() => setScreen('details')}><Icon name="settings"/></button></header> :
+      {screen === 'home' ? <header className="home-header"><span className={`status-pill ${healthy ? 'good' : ''}`}><span className="small-dot"/>{!available ? 'Desktop required' : statusWaiting ? 'Checking status…' : !statusKnown ? 'Status unavailable' : status.state}</span><button className="icon-button header-button" aria-label="Open details" onClick={() => setScreen('details')}><Icon name="info"/></button></header> :
       <header className="screen-header"><button className="icon-button header-button" aria-label="Back" onClick={() => setScreen(screen === 'profiles' ? profilesBack : screen === 'diagnostics' ? 'details' : 'home')}><Icon name="back"/></button><h1>{screen === 'details' ? 'Details' : screen === 'profiles' ? 'Profiles' : 'Diagnostics'}</h1>{screen === 'profiles' && <span className="header-count">{profiles.length}</span>}{screen === 'diagnostics' && <span className="header-count">{logCount}</span>}</header>}
       {!available && <div className="bridge-banner" role="status"><strong>Desktop bridge unavailable</strong><span>This is a browser preview. Open the Wails desktop app to import profiles and run Xray.</span></div>}
       {syncError && <div className="alert error" role="alert">{syncError}<button onClick={() => { void refresh(true); }}>Retry</button></div>}
@@ -231,36 +234,36 @@ export default function App() {
       {screen === 'home' && <div className="home-screen">
         {selected ? <button className="profile selected" onClick={() => openProfiles('home')}>{profileCard(selected)}<Icon name="arrow"/></button> :
           <button className="profile empty-profile" onClick={() => openProfiles('home')}><span className="profile-icon"><Icon name="plus"/></span><span className="profile-text"><strong>No profile selected</strong><small>Import a profile to get started</small></span><Icon name="arrow"/></button>}
-        {active && status.profileId !== selectedId && <p className="active-profile">Active profile: <strong>{activeProfile?.name || 'Unavailable'}</strong></p>}
+        {active && status.profileId !== selectedId && <p className="active-profile">Selected: <strong>{selected?.name || 'None'}</strong> · Active: <strong>{activeProfile?.name || 'Unavailable'}</strong></p>}
         <section className="connection-card">
-        <div className={`connection-symbol ${active ? 'active' : ''}`}><Icon name="power"/></div>
+        <button type="button" className={`connection-symbol ${healthy ? 'active' : ''}`} aria-label={connectionLabel} title={connectionLabel} disabled={connectionDisabled} onClick={() => { void toggleConnection(); }}><Icon name="power"/></button>
+        {statusKnown && (transition || recovery || !!connectionBusy || (active && status.processState === 'stopped') || (status.processState === 'running' && !healthy)) && <span className="connection-action" aria-hidden="true">{connectionLabel}</span>}
         <h1>{heading}</h1>
-        <p className="hero-subtitle">{selected ? <>Selected profile <strong>{selected.name}</strong></> : 'Import a profile to get started with your local proxy.'}</p>
-        <button className={`connect-button ${active ? 'disconnect' : ''}`} disabled={connectionDisabled} onClick={() => { void toggleConnection(); }}><Icon name="power"/>{connectionLabel}</button>
-        <div className="state-grid"><div><span className="state-label">XRAY PROCESS</span><strong><span className={`small-dot ${status.processState === 'running' ? 'good-dot' : ''}`}/>{available ? processLabels[status.processState] : 'Unavailable'}</strong></div><div><span className="state-label">NETWORK CHECK</span><strong><span className={`small-dot ${healthy ? 'good-dot' : ''}`}/>{available ? healthLabels[status.networkHealth] : 'Not verified'}</strong></div></div>
-        <p className="status-detail">{status.message || 'Process status and network reachability are checked separately.'}</p>
+        <p className="hero-subtitle">SOCKS5 127.0.0.1:10808 · HTTP 127.0.0.1:10809</p>
         </section>
+        <div className="state-grid"><div><span className="state-label">Xray process</span><strong><span className={`small-dot ${statusKnown && status.processState === 'running' ? 'good-dot' : ''}`}/>{statusKnown ? processLabels[status.processState] : statusWaiting ? 'Checking…' : 'Unavailable'}</strong></div><div><span className="state-label">Network check</span><strong><span className={`small-dot ${healthy ? 'good-dot' : ''}`}/>{!statusKnown ? statusWaiting ? 'Checking…' : 'Unavailable' : status.processState === 'running' ? healthLabels[status.networkHealth] : 'Not verified'}</strong></div></div>
+        <p className="status-detail">{!statusKnown ? statusWaiting ? 'Waiting for desktop status.' : 'Desktop status is unavailable.' : status.message || (status.processState === 'stopped' ? 'Local proxy is stopped' : 'Process status and network reachability are checked separately.')}</p>
       </div>}
       {screen === 'details' && <div className="detail-screen">
-      <span className="eyebrow">LOCAL ENDPOINTS</span>
+      <span className="eyebrow">Local endpoints</span>
       <section className="endpoints" aria-label="Local proxy addresses">
-        {[['SOCKS5', '127.0.0.1:10808'], ['HTTP', '127.0.0.1:10809']].map(([protocol, address]) => <div className="endpoint" key={protocol}><div><span className="eyebrow">{protocol} PROXY</span><code>{address}</code></div><button className="icon-button" aria-label={`Copy ${protocol} address`} onClick={() => { void copyAddress(address); }}><Icon name="copy"/></button></div>)}
+        {[['SOCKS5', '127.0.0.1:10808'], ['HTTP', '127.0.0.1:10809']].map(([protocol, address]) => <div className="endpoint" key={protocol}><div><span className="eyebrow">{protocol} proxy</span><code>{address}</code></div><button className="icon-button" aria-label={`Copy ${protocol} address`} onClick={() => { void copyAddress(address); }}><Icon name="copy"/></button></div>)}
       </section>
       <p className="routing-note"><Icon name="shield"/>Only apps configured to use these proxies are routed.</p>
-      <span className="eyebrow">PROFILE</span>
+      <span className="eyebrow">Profile</span>
       <section className="profile-panel">
         {selected ? <button className="profile selected" onClick={() => openProfiles('details')}>{profileCard(selected)}<Icon name="arrow"/></button> : <button className="profile empty-profile" onClick={() => openProfiles('details')}><span className="profile-text"><strong>No profile selected</strong><small>Choose or import a profile</small></span><Icon name="arrow"/></button>}
-        <div className="profile-actions"><span>{profiles.length} {profiles.length === 1 ? 'profile' : 'profiles'}</span>{selected && <><button className="secondary" aria-label="Rename profile" disabled={!available || !!busy} onClick={() => { setName(selected.name); setError(''); setModal('rename'); }}>Rename</button><button className="text-danger" aria-label="Delete profile" disabled={!available || !!busy || (active && status.profileId === selected.id)} onClick={() => { setError(''); setModal('delete'); }}><Icon name="trash"/>Delete</button></>}</div>
+        <div className="profile-actions"><span>{profiles.length} {profiles.length === 1 ? 'profile' : 'profiles'}</span>{selected && <><button className="secondary" aria-label="Rename profile" disabled={!available || !!busy} onClick={() => { setName(selected.name); setError(''); setModal('rename'); }}>Rename</button><button className="text-danger" aria-label="Delete profile" disabled={!available || !!busy || (active && status.profileId === selected.id)} onClick={() => { setError(''); setModal('delete'); }}>Delete</button></>}</div>
       </section>
       {importButton}
-      <span className="eyebrow runtime-label">RUNTIME</span>
+      <span className="eyebrow runtime-label">Runtime</span>
       <section className="settings-card">
-        <p>Official Xray Core <strong>{status.xrayVersion || 'Version unavailable'}</strong></p>
+        <p>Official Xray Core <code>{status.xrayVersion || 'Version unavailable'}</code></p>
         <p className="hint">Bundled runtime. Pinned SHA-256 verified before launch. See THIRD-PARTY-NOTICES and licenses.</p>
         <p className="hint">Last proxy check: {status.lastCheckedAt || 'Not checked yet'}. Other destinations may differ.</p>
       </section>
       <button className="diagnostics-link" onClick={() => { setScreen('diagnostics'); void refreshLogs(); }}><span>Diagnostics <span className="header-count">{logCount}</span></span><span className="muted">Recent activity</span><Icon name="arrow"/></button>
-      <p className="footer-note"><span className="small-dot good-dot"/> Local-first. Yours only. · Xray Mini</p>
+      <p className="footer-note"><span className={`small-dot ${healthy ? 'good-dot' : ''}`}/> Local-first · Yours only · Xray Mini 0.1</p>
       </div>}
       {screen === 'profiles' && <div className="profiles-screen">
         <nav className="profile-list" aria-label="Profiles">
@@ -271,7 +274,7 @@ export default function App() {
         <p className="footer-note">Select a profile to connect.</p>
       </div>}
       {screen === 'diagnostics' && <div className="diagnostics-screen">
-        <div className="log-list" aria-label="Recent diagnostic logs">{logsUnavailable ? <p role="status">Unable to load diagnostics.</p> : logsLoading ? <p role="status">Loading diagnostics…</p> : logs.length ? logs.slice(-100).map((entry, index) => <div className="log-entry" key={`${entry.time}-${index}`}><time dateTime={entry.time} title={entry.time}>{logTime(entry.time)}</time><span className={`log-level ${entry.level}`}>{entry.level}</span><span>{entry.message}</span></div>) : <p>No activity yet. Runtime events will appear here.</p>}</div>
+        <div className="log-list" aria-label="Recent diagnostic logs">{logsUnavailable ? <p role="status">Unable to load diagnostics.</p> : logsLoading ? <p role="status">Loading diagnostics…</p> : logs.length ? logs.slice(-100).map((entry, index) => <div className="log-entry" key={`${entry.time}-${index}`}><time dateTime={entry.time} title={entry.time}>{logTime(entry.time)}</time><span role="img" aria-label={entry.level} className={`small-dot log-dot ${entry.level === 'info' && entry.message === 'HTTP proxy check passed; other destinations may differ' ? 'good-dot' : ''}`}/><span className="log-message">{entry.level !== 'info' && <span className={`log-level ${entry.level}`}>{entry.level} · </span>}{entry.message}</span></div>) : <p>No activity yet. Runtime events will appear here.</p>}</div>
         <p className="footer-note">Last 100 runtime events since app start.</p>
       </div>}
     </main>
