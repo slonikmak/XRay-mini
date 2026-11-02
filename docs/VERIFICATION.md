@@ -1,4 +1,18 @@
+# Verification — Xray 26.10.31 local loopback, 2026-11-02
+
+On Windows 11 Home x64 (build 26300), the opt-in native Windows loopback test
+passed with Xray 26.10.31, executable SHA-256
+d5b558191cccb1e92a5772b68b8cab67717b26f634b0f15153215f65ae982a7e.
+It covered RAW+REALITY, XHTTP+REALITY, and XHTTP+TLS through HTTP and SOCKS5,
+including stopped-peer/no-bypass, recovery and cleanup. The test used the
+working tree based on e983e4739bd722375fa3ea9f3697685cc3bb48f5 with the local
+runtime-pin changes applied. It used owned local peers; it does not establish
+external-server egress or complete GUI/Windows acceptance.
+
 # Verification — native Windows update, 2026-11-01
+
+The runtime pin has since changed to Xray 26.10.31; the historical execution
+reports in this section describe the previous 26.10.29 runtime.
 
 [Concurrency termination/recovery fix](../_bmad-output/backlog/evidence/concurrency-recovery-2026-11-01.md): R3-01/02/03 repaired with terminal event ordering, explicit working-child stop retry and modal Disconnect during pending profile saves. Final production Go suite/vet, TypeScript/42 frontend tests, repeated service regressions, real Windows deny-delete cleanup case, real-core three-transport loopback, Wails build and offline package checks passed. Four independent review lenses ran; current findings were patched. Native failed-Kill recovery with an actual pending DPAPI GUI save remains unproven; preflight-child retry is explicitly deferred. The linked manifest holds the exact tested source/artifact identities.
 
@@ -53,7 +67,7 @@ Current campaign: run on **Windows11 x64 with WebView2 installed**, as a normal 
 
 1. `go test -v ./internal/core` on Windows: run the native Job Object harness (`TestWindowsJobKillsChildOnParentExit`) and executable-lock test. The harness checks preflight/runtime children after abrupt parent exit. Also stress parent death during child creation, cancel during preflight/start, repeated start/stop and nested-job execution.
 2. Verify application starts without elevation, actual WebView2 window renders, buttons/events/snapshot recovery work after reopening/focus; keyboard, scaling and screen-reader/visual behavior need real-device inspection.
-3. Import each of RAW+REALITY, XHTTP+REALITY, XHTTP+TLS against controlled authorized test servers with pinned26.10.29; make real HTTP **and SOCKS5** requests. Confirm remote egress, no direct fallback and both listeners only127.0.0.1. Local Linux integration does not replace this platform check.
+3. Import each of RAW+REALITY, XHTTP+REALITY, XHTTP+TLS against controlled authorized test servers with the currently pinned Xray version; make real HTTP **and SOCKS5** requests. Confirm remote egress, no direct fallback and both listeners only127.0.0.1. Local Linux integration does not replace this platform check.
 4. Verify DPAPI profile round-trip and that another Windows account cannot decrypt; inspect directory/file DACLs. Confirm normal disconnect deletes runtime JSON, force-kill GUI then relaunch removes orphan data, and a second live instance cannot delete it.
 5. Disconnect during preflight, creation and probe. Confirm no xray.exe/child descendants remain after Disconnect, GUI exit or forced GUI termination; verify ports released and exactly one Wait/cleanup path.
 6. Occupy each proxy port before Connect; check clear error and cleanup. Test missing/modified bundled binary rejection **before execution**. Verify official binary passes, version UI matches package and license/notice present.

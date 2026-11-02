@@ -2,7 +2,7 @@
 
 ## Prerequisites
 
-Use Windows 11 x64 with WebView2 installed for the actual demo. The repository pins Go 1.26.10 and Wails 3.0.0. Use Node.js 22+ and Python 3. CI selects Node 22 and Python 3.12. The Windows hosted build runner is a build/test environment, not proof of Windows 11 desktop acceptance.
+Use Windows 11 x64 with WebView2 installed for the actual demo. The repository pins Go 1.26.10 and Wails 3.0.0. Use Node.js 22 or 24+ and Python 3; Vitest 4 does not support Node.js 23. CI selects Node 22 and Python 3.12. The Windows hosted build runner is a build/test environment, not proof of Windows 11 desktop acceptance.
 
 ```powershell
 go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0

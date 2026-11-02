@@ -16,6 +16,19 @@ npm suggests a **SemVer-major Vitest upgrade**, not a verified drop-in change. P
 
 The exact full/prod reports and lockfile identity are retained in [dependency-audit-5014da4.json](evidence/dependency-audit-5014da4.json). Hosted Go race/vet, frontend and Python checks have passed for that source; Windows packaging is a separate job and its status must be read from Actions.
 
+## Local update — 2 November 2026
+
+Vitest was updated to 4.1.12, which removes the affected Tinypool dependency.
+A clean install and the project's full-tree and production-only audit both
+reported zero findings on Windows with Node 24.20.0 and npm 11.19.0, from
+a working tree based on e983e4739bd722375fa3ea9f3697685cc3bb48f5 with the
+dependency update applied. The reviewed lockfile SHA-256 was
+faa692a5adceeb25e9d1ee6c80632abee353861c656671246f60376ab126f1aa for the
+Windows CRLF checkout; its LF-normalized Git content hashes to
+a1390d21e4b21e8290e0a12bdb2144ffacab0f42c38dda1e91b187cf516f10de.
+Hosted CI must independently pass on the committed change; this is not a
+comprehensive security verdict.
+
 ## Repeatable audit
 
 ```powershell

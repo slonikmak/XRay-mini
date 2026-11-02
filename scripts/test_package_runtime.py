@@ -12,6 +12,17 @@ import zipfile
 import package_runtime as package
 
 
+class PackagePinConsistencyTests(unittest.TestCase):
+    def test_runtime_pins_match_go_and_notice(self):
+        root = pathlib.Path(__file__).resolve().parent.parent
+        runtime = (root / "internal" / "core" / "runtime.go").read_text(encoding="utf-8")
+        notice = (package.LICENSES / "NOTICE.md").read_text(encoding="utf-8")
+        self.assertIn(f'const XrayVersion = "{package.VERSION}"', runtime)
+        self.assertIn(f'const XrayExecutableSHA256 = "{package.EXE_SHA256}"', runtime)
+        for value in (package.VERSION, package.ARCHIVE_SHA256, package.EXE_SHA256):
+            self.assertIn(value, notice)
+
+
 class PackageRuntimeTests(unittest.TestCase):
     def setUp(self):
         temporary = tempfile.TemporaryDirectory()

@@ -17,9 +17,9 @@ import sys
 import urllib.request
 import zipfile
 
-VERSION = "26.10.29"
-ARCHIVE_SHA256 = "fce33e81cccf50e7aab572b175519a50b5e0f9d2f5c8d1ed73012ea5c9ad4d58"
-EXE_SHA256 = "07a332b714a3c0eee047a22a9c0ea749b64df33e4e1ff6d28a8c7f9ef943ce10"
+VERSION = "26.10.31"
+ARCHIVE_SHA256 = "2e04a9995a6f2ad1b28c0bb25c708ecb2695e43a1c9c7889c4b6ac2b48cf7a6a"
+EXE_SHA256 = "d5b558191cccb1e92a5772b68b8cab67717b26f634b0f15153215f65ae982a7e"
 URL = f"https://github.com/XTLS/Xray-core/releases/download/v{VERSION}/Xray-windows-64.zip"
 LICENSES = pathlib.Path(__file__).resolve().parent.parent / "licenses"
 

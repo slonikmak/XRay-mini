@@ -36,7 +36,11 @@ asset metadata and the official companion checksum file:
 These Linux pins are separate from the shipped Windows runtime pins. No Linux
 binary or generated secrets are committed.
 
-## Reproduce on Linux amd64
+## Historical commands for Linux amd64
+
+Upstream withdrew release 26.10.29, so the historical download URLs below no
+longer work. The retained results describe that release only; they do not
+establish compatibility of the currently bundled version.
 
 Requires Python 3, curl, OpenSSL, Go 1.26.10, and available loopback sockets.
 Download only from the official release URLs above; do not substitute a mirror.
