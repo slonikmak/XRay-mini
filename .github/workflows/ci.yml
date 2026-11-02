@@ -133,7 +133,14 @@ jobs:
           go vet -tags production ./... *> artifacts/windows-vet.log
           if ($LASTEXITCODE -ne 0) { Get-Content artifacts/windows-vet.log; exit $LASTEXITCODE }
       - name: Package allowlisted files with source and hashes
-        run: python scripts/package_demo.py --bin bin --output dist-demo
+        shell: pwsh
+        run: |
+          python scripts/package_demo.py --bin bin --output dist-demo
+          if ($LASTEXITCODE -ne 0) {
+            $packageExitCode = $LASTEXITCODE
+            git status --short --untracked-files=all
+            exit $packageExitCode
+          }
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: xray-mini-demo-${{ github.sha }}
