@@ -21,7 +21,7 @@ The CI workflow produces a complete package as an Actions artifact when its Wind
 
 Import and preview a configuration, choose a profile, connect, and configure a browser or another application to use `127.0.0.1:10808` (SOCKS5, TCP) or `127.0.0.1:10809` (HTTP). The client verifies and starts its pinned Xray executable, checks an HTTPS request through the proxy and reports process state separately from network health. Disconnect owns the full stop/wait/cleanup sequence.
 
-Closing the window hides Xray Mini in the system tray; an active connection keeps running. Click the tray icon or choose **Open** to return to the same window. The tray menu shows connection status and offers Cancel connection, Disconnect or Retry stop when applicable. Choose **Exit** to stop the owned Xray process through normal application shutdown and quit.
+Closing the window hides Xray Mini in the system tray; an active connection keeps running. The tray icon is mint when the proxy check succeeds, gray while off or transitioning, and amber when a check fails or an error occurs. Hover over it for the current status. Click the tray icon or choose **Open** to return to the same window. The tray menu offers Cancel connection, Disconnect or Retry stop when applicable. Choose **Exit** to stop the owned Xray process through normal application shutdown and quit.
 
 Profile import is deliberately restrictive: exactly one standalone VLESS outbound is selected; source inbounds, routing and unrelated sections are discarded with an explicit preview. Both local listeners route through the selected outbound, without a direct fallback. Subscription loading is manual, bounded and separate from saving or connecting; candidate previews expire and can be canceled.
 

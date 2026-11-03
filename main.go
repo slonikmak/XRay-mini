@@ -42,6 +42,9 @@ func trayMenuForStatus(status core.Status) trayMenuState {
 	case "Disconnected", "Connecting", "Connected", "Degraded", "Disconnecting", "Error":
 		state.status = status.State
 	}
+	if (status.State == "Connecting" || status.State == "Connected") && status.ProcessState == "running" && status.NetworkHealth == "unhealthy" {
+		state.status = "Check failed"
+	}
 	if status.SessionID == "" {
 		return state
 	}
@@ -58,6 +61,10 @@ func trayMenuForStatus(status core.Status) trayMenuState {
 }
 
 func main() {
+	icons, err := trayIcons(trayIcon)
+	if err != nil {
+		log.Fatal("Unable to prepare system tray icons: ", err)
+	}
 	desktop := NewApp()
 	trayUpdates := make(chan struct{}, 1)
 	windowShown := make(chan struct{})
@@ -100,7 +107,14 @@ func main() {
 	}
 
 	tray := app.SystemTray.New()
-	tray.SetIcon(trayIcon)
+	currentIcon := trayIconIdle
+	tray.SetIcon(icons[currentIcon])
+	// Wails starts services before it initializes pending trays and windows.
+	// Set the initial icon from that snapshot before the native tray exists.
+	desktop.trayInitialStatus = func(status core.Status) {
+		currentIcon = trayIconForStatus(status)
+		tray.SetIcon(icons[currentIcon])
+	}
 	tray.SetTooltip("Xray Mini — Starting")
 	tray.OnClick(openWindow)
 	menu := app.NewMenu()
@@ -126,7 +140,12 @@ func main() {
 	tray.SetMenu(menu)
 
 	updateTray := func() {
-		state := trayMenuForStatus(desktop.GetStatus())
+		status := desktop.GetStatus()
+		state := trayMenuForStatus(status)
+		if nextIcon := trayIconForStatus(status); nextIcon != currentIcon {
+			tray.SetIcon(icons[nextIcon])
+			currentIcon = nextIcon
+		}
 		menu.ItemAt(0).SetLabel(state.status)
 		stopItem.SetLabel(state.action)
 		stopItem.SetHidden(state.kind == trayNoAction)

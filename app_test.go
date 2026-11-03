@@ -229,6 +229,8 @@ func TestStartupFailureKeepsSafeStatusAndRejectsOperations(t *testing.T) {
 	}
 	defer owner.Close()
 	app := NewApp()
+	var trayStatus core.Status
+	app.trayInitialStatus = func(status core.Status) { trayStatus = status }
 	t.Cleanup(func() {
 		if err := app.ServiceShutdown(); err != nil {
 			t.Error(err)
@@ -236,6 +238,9 @@ func TestStartupFailureKeepsSafeStatusAndRejectsOperations(t *testing.T) {
 	})
 	if err := app.ServiceStartup(context.Background(), application.ServiceOptions{}); err != nil {
 		t.Fatalf("safe startup failure aborted the desktop: %v", err)
+	}
+	if trayStatus.State != "Error" || trayIconForStatus(trayStatus) != trayIconWarning {
+		t.Fatalf("startup failure was not reflected in the initial tray status: %+v", trayStatus)
 	}
 	status := app.GetStatus()
 	if status.State != "Error" || status.Message != "another Xray Mini instance owns this profile directory" || status.XrayVersion != core.XrayVersion {
@@ -249,5 +254,23 @@ func TestStartupFailureKeepsSafeStatusAndRejectsOperations(t *testing.T) {
 	}
 	if err := app.ServiceShutdown(); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestTrayInitialStatusUsesStartedService(t *testing.T) {
+	t.Setenv("APPDATA", t.TempDir())
+	app := NewApp()
+	var trayStatus core.Status
+	app.trayInitialStatus = func(status core.Status) { trayStatus = status }
+	if err := app.ServiceStartup(context.Background(), application.ServiceOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := app.ServiceShutdown(); err != nil {
+			t.Error(err)
+		}
+	})
+	if trayStatus.State != "Disconnected" || trayIconForStatus(trayStatus) != trayIconIdle {
+		t.Fatalf("initial tray status does not match the service: %+v", trayStatus)
 	}
 }

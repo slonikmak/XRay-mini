@@ -18,6 +18,7 @@ import (
 type App struct {
 	service           *core.Service
 	startupError      error
+	trayInitialStatus func(core.Status)
 	trayStatusChanged func()
 	closing           atomic.Bool
 	previewMu         sync.Mutex
@@ -40,7 +41,12 @@ type SubscriptionCandidate struct {
 
 func NewApp() *App { return &App{} }
 func (a *App) ServiceStartup(ctx context.Context, options application.ServiceOptions) error {
-	defer a.notifyTrayStatus()
+	defer func() {
+		if a.trayInitialStatus != nil {
+			a.trayInitialStatus(a.GetStatus())
+		}
+		a.notifyTrayStatus()
+	}()
 	a.previewMu.Lock()
 	a.lifetime, a.stopLifetime = context.WithCancel(ctx)
 	a.previewMu.Unlock()
