@@ -1,3 +1,65 @@
+# CI quality gate — local verification, 2026-11-03
+
+[CI](../.github/workflows/ci.yml) requires the existing native Windows loopback
+after building the complete production package. It compiles a production core test
+executable beside `bin/runtime/xray.exe`, enables `XRAY_MINI_NATIVE_LOOPBACK=1`,
+and captures `go tool test2json` output. The stdlib
+[report verifier](../scripts/check_native_loopback.py) requires actual run/pass
+events for `TestNativeWindowsLoopback`, `raw-reality`, `xhttp-reality`, and
+`xhttp-tls`, followed by successful package completion. Empty, malformed,
+truncated, skipped, failed or incomplete reports fail the gate. Native command
+failure also fails the job. Reports and logs are uploaded by the Windows job on
+success and failure; the gate removes its own test executable in `finally` and
+refuses to overwrite an existing one. The archive's existing allowlist and strict
+clean-checkout requirement remain in force.
+
+The stable **Quality gate** job runs with `always()` and requires all five jobs:
+portable Go race tests, frontend, Python, dependency audit, and Windows. Any
+missing, failed, cancelled or skipped dependency fails the aggregate. Existing
+PR, main push, manual and reusable-workflow triggers and draft-release checks
+are preserved; no schedule, dedicated runner or external peer is required.
+The hosted Windows job uses `windows-2022` (Windows Server). Its result is local
+transport/backend evidence and does not complete Windows 11 product acceptance,
+GUI/WebView2 inspection, another-account checks or external egress testing below.
+
+Local execution on Windows 11 Home x64, build 26300, Go 1.26.10, on app commit
+`a24ad27ab66f77ca9dbe7c36148a042a20262630` with these uncommitted CI/verifier/docs
+changes passed all three transports, the root (12.22s), and package completion.
+The production test executable used the existing verified Xray 26.10.31 runtime,
+SHA-256 `d5b558191cccb1e92a5772b68b8cab67717b26f634b0f15153215f65ae982a7e`.
+The exact workflow PowerShell block passed, left no test executable in `bin`, and
+saved `artifacts/native-loopback.jsonl` plus logs. Disabling opt-in produced a
+successful test process with a SKIP report that the verifier rejected. A
+pre-existing fixture sentinel was preserved. Python discovery passed 46 tests;
+actionlint 1.7.7 accepted the workflow; 22 aggregate result fixtures passed.
+These are local results; the workflow changes have not been published or run on
+GitHub. Requiring the future check in repository settings is a separate operation
+and does not publish the workflow.
+
+Repeat the native gate from the repository root in PowerShell after
+`wails3 task package` completes successfully (the workflow contains the full
+logging version):
+
+```powershell
+$fixture = Join-Path $PWD 'bin/core-native.test.exe'
+if (Test-Path -LiteralPath $fixture) { throw 'Fixture already exists' }
+New-Item -ItemType Directory -Force artifacts | Out-Null
+$previousOptIn = $env:XRAY_MINI_NATIVE_LOOPBACK
+try {
+  go test -c -tags production -o $fixture ./internal/core
+  if ($LASTEXITCODE -ne 0) { throw 'Fixture compilation failed' }
+  $env:XRAY_MINI_NATIVE_LOOPBACK = '1'
+  go tool test2json -t -p github.com/slonikmak/XRay-mini/internal/core $fixture '-test.run=^TestNativeWindowsLoopback$' '-test.v=test2json' '-test.timeout=180s' > artifacts/native-loopback.jsonl 2> artifacts/native-loopback.log
+  $nativeExitCode = $LASTEXITCODE
+  python scripts/check_native_loopback.py artifacts/native-loopback.jsonl
+  if ($LASTEXITCODE -ne 0 -or $nativeExitCode -ne 0) { throw 'Native loopback gate failed' }
+} finally {
+  $env:XRAY_MINI_NATIVE_LOOPBACK = $previousOptIn
+  if (Test-Path -LiteralPath $fixture) { Remove-Item -LiteralPath $fixture }
+}
+python -m unittest discover -s scripts -p 'test_*.py' -v
+```
+
 # Verification — Xray 26.10.31 local loopback, 2026-11-02
 
 On Windows 11 Home x64 (build 26300), the opt-in native Windows loopback test

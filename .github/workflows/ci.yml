@@ -132,6 +132,31 @@ jobs:
           if ($LASTEXITCODE -ne 0) { Get-Content artifacts/windows-tests.log; exit $LASTEXITCODE }
           go vet -tags production ./... *> artifacts/windows-vet.log
           if ($LASTEXITCODE -ne 0) { Get-Content artifacts/windows-vet.log; exit $LASTEXITCODE }
+      - name: Require real Xray native loopback (all three transports)
+        shell: pwsh
+        env:
+          XRAY_MINI_NATIVE_LOOPBACK: '1'
+        run: |
+          $fixture = Join-Path $PWD 'bin/core-native.test.exe'
+          if (Test-Path -LiteralPath $fixture) { throw 'Native fixture path already exists; refusing to overwrite it' }
+          New-Item -ItemType File -Force artifacts/native-loopback.jsonl | Out-Null
+          try {
+            go test -c -tags production -o $fixture ./internal/core *> artifacts/native-loopback-compile.log
+            $nativeExitCode = $LASTEXITCODE
+            if ($nativeExitCode -eq 0) {
+              go tool test2json -t -p github.com/slonikmak/XRay-mini/internal/core $fixture '-test.run=^TestNativeWindowsLoopback$' '-test.v=test2json' '-test.timeout=180s' > artifacts/native-loopback.jsonl 2> artifacts/native-loopback.log
+              $nativeExitCode = $LASTEXITCODE
+            } else {
+              Get-Content artifacts/native-loopback-compile.log
+            }
+            python scripts/check_native_loopback.py artifacts/native-loopback.jsonl *> artifacts/native-loopback-verifier.log
+            $verifyExitCode = $LASTEXITCODE
+            Get-Content artifacts/native-loopback-verifier.log
+            if ($nativeExitCode -ne 0) { exit $nativeExitCode }
+            if ($verifyExitCode -ne 0) { exit $verifyExitCode }
+          } finally {
+            if (Test-Path -LiteralPath $fixture) { Remove-Item -LiteralPath $fixture }
+          }
       - name: Package allowlisted files with source and hashes
         shell: pwsh
         run: |
@@ -151,6 +176,29 @@ jobs:
         if: always()
         with:
           name: windows-checks-${{ github.sha }}
-          path: artifacts/*.log
+          path: |
+            artifacts/*.log
+            artifacts/native-loopback.jsonl
           if-no-files-found: warn
           retention-days: 14
+
+  quality:
+    name: Quality gate
+    if: ${{ always() }}
+    needs: [core, frontend, python, dependencies, windows]
+    runs-on: ubuntu-22.04
+    timeout-minutes: 5
+    steps:
+      - name: Require every CI job to succeed
+        env:
+          NEEDS_JSON: ${{ toJSON(needs) }}
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          needs = json.loads(os.environ['NEEDS_JSON'])
+          required = {'core', 'frontend', 'python', 'dependencies', 'windows'}
+          if set(needs) != required or any(job.get('result') != 'success' for job in needs.values()):
+              raise SystemExit('Quality gate failed: every required CI job must succeed')
+          print('Quality gate passed: all five required CI jobs succeeded')
+          PY
